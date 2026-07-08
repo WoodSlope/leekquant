@@ -1,0 +1,41 @@
+name: Close Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 16:30 Asia/Shanghai, after the A-share close. GitHub cron uses UTC.
+    - cron: "30 8 * * 1-5"
+
+permissions:
+  contents: write
+
+jobs:
+  generate-public-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Generate close scan data
+        run: python scripts/generate_public_data.py --provider auto
+
+      - name: Commit generated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public-data
+          if git diff --cached --quiet; then
+            echo "No public data changes."
+          else
+            git commit -m "chore: update close scan data"
+            git push
+          fi

@@ -1,0 +1,14 @@
+data/cache.sqlite
+data/cache.sqlite-*
+data/.gitkeep
+.venv/
+.pycache/
+__pycache__/
+*.pyc
+.DS_Store
+*.log
+screenshots/
+tests/
+start.command
+start.sh
+双击启动.command

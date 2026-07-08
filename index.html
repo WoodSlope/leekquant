@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="author" content="LINPO LAB">
+    <title>韭菜量化 - LINPO LAB</title>
+    <!-- Tailwind CSS (开发版 CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: {} }
+        }
+    </script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel (用于在浏览器端编译 JSX) -->
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <style>
+        /* 隐藏滚动条但保留滚动功能，提升高级感 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+        /* 移除数字输入框的箭头 */
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    </style>
+</head>
+<body class="bg-[#0D0E11] text-zinc-300 antialiased overflow-hidden">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- 持久化状态 Hook ---
+        function useStickyState(defaultValue, key) {
+            const [value, setValue] = useState(() => {
+                const stickyValue = window.localStorage.getItem(key);
+                if (stickyValue === null) return defaultValue;
+                try {
+                    return JSON.parse(stickyValue);
+                } catch (error) {
+                    window.localStorage.removeItem(key);
+                    return defaultValue;
+                }
+            });
+            useEffect(() => {
+                window.localStorage.setItem(key, JSON.stringify(value));
+            }, [key, value]);
+            return [value, setValue];
+        }
+
+        // --- 模拟 SVG 图标库 ---
+        const Icons = {
+            ChevronRight: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"></polyline></svg>,
+            ChevronDown: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>,
+            Calendar: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>,
+            Activity: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>,
+            Briefcase: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>,
+            AlertTriangle: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>,
+            Play: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>,
+            Plus: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            CheckCircle2: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="9 12 12 15 16 9"></polyline></svg>,
+            XCircle: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
+            TrendingUp: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>,
+            ShieldAlert: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v4"></path><path d="M12 16h.01"></path></svg>,
+            BarChart3: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 3v18h18"></path><rect x="7" y="10" width="4" height="7"></rect><rect x="13" y="5" width="4" height="12"></rect></svg>,
+            Save: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
+            Zap: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>,
+            FileText: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>,
+            ArrowRight: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+            SlidersHorizontal: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="21" y1="4" x2="14" y2="4"></line><line x1="10" y1="4" x2="3" y2="4"></line><line x1="21" y1="12" x2="12" y2="12"></line><line x1="8" y1="12" x2="3" y2="12"></line><line x1="21" y1="20" x2="16" y2="20"></line><line x1="12" y1="20" x2="3" y2="20"></line><line x1="14" y1="2" x2="14" y2="6"></line><line x1="8" y1="10" x2="8" y2="14"></line><line x1="16" y1="18" x2="16" y2="22"></line></svg>,
+            Trash2: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>,
+            Search: ({size=16, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+            LeekMark: ({size=20, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true"><path d="M8 21c4.5-4.8 4.3-10.8 2.7-17" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round"/><path d="M12 21c2.4-5.9 2.5-11.7 1-18" stroke="#4ade80" strokeWidth="1.8" strokeLinecap="round"/><path d="M16 21c.3-5.2 1.3-9.4 4-14.2" stroke="#86efac" strokeWidth="1.8" strokeLinecap="round"/><path d="M10.5 20.8c-1.7-4.7-4-8.3-7-11.8" stroke="#16a34a" strokeWidth="1.8" strokeLinecap="round"/><path d="M7.5 20.8h9.2" stroke="#bbf7d0" strokeWidth="2.2" strokeLinecap="round"/><path d="M6.7 18.2c3.4 1.1 6.9 1.1 10.5 0" stroke="#15803d" strokeWidth="1.6" strokeLinecap="round"/></svg>
+        };
+
+        // ==========================================
+        // UI规范组件：通用卡片 (Dashboard Card)
+        // ==========================================
+        const Card = ({ title, actions, children, className = "", bodyClass = "p-4 md:p-6" }) => (
+            <div className={`bg-[#16181D]/95 border border-zinc-800/70 rounded-lg overflow-hidden flex flex-col shadow-[0_18px_60px_rgba(0,0,0,0.20)] ${className}`}>
+                {(title || actions) && (
+                    <div className="min-h-14 px-4 md:px-6 py-3 border-b border-zinc-800/60 flex items-center justify-between bg-[#111216]/95 shrink-0 gap-3">
+                        <div className="text-sm font-bold text-zinc-200 flex items-center">{title}</div>
+                        {actions && <div className="flex items-center gap-3 flex-wrap justify-end">{actions}</div>}
+                    </div>
+                )}
+                <div className={`flex-1 ${bodyClass}`}>
+                    {children}
+                </div>
+            </div>
+        );
+
+        const Badge = ({ type, children }) => {
+            const styles = {
+                pass: "bg-green-950/60 text-green-400 border-green-800/50",
+                fail: "bg-red-950/60 text-red-400 border-red-800/50",
+                neutral: "bg-zinc-800/60 text-zinc-300 border-zinc-700/50",
+                ready: "bg-blue-950/60 text-blue-400 border-blue-800/50",
+                warning: "bg-yellow-950/60 text-yellow-400 border-yellow-800/50"
+            };
+            return <span className={`border text-xs px-1.5 py-0.5 rounded-md font-mono font-medium ${styles[type] || styles.neutral}`}>{children}</span>;
+        };
+
+        const PageShell = ({ children, className = "" }) => (
+            <div className={`flex-1 flex flex-col p-4 md:p-6 overflow-y-auto w-full gap-4 md:gap-5 ${className}`}>
+                {children}
+            </div>
+        );
+
+        const PageHeader = ({ eyebrow, title, subtitle, actions, stats }) => (
+            <div className="shrink-0 border border-zinc-800/70 rounded-lg bg-[#15171C]/95 shadow-[0_18px_60px_rgba(0,0,0,0.24)] overflow-hidden">
+                <div className="px-4 py-3 md:px-5 md:py-3.5 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                    <div className="min-w-0">
+                        {eyebrow && <div className="text-[10px] font-mono text-zinc-500 mb-1.5">{eyebrow}</div>}
+                        <h1 className="text-lg md:text-xl font-bold text-zinc-100 tracking-normal">{title}</h1>
+                        {subtitle && <p className="text-sm text-zinc-500 mt-1 leading-5 max-w-3xl">{subtitle}</p>}
+                    </div>
+                    {actions && <div className="flex items-center gap-2 flex-wrap shrink-0">{actions}</div>}
+                </div>
+                {stats && <div className="grid grid-cols-2 lg:grid-cols-4 border-t border-zinc-800/60 divide-x divide-y lg:divide-y-0 divide-zinc-800/60">{stats}</div>}
+            </div>
+        );
+
+        const StatBlock = ({ label, value, tone = "text-zinc-100" }) => (
+            <div className="px-4 md:px-5 py-2.5 min-w-0 bg-[#111216]/70">
+                <div className="text-[10px] font-mono text-zinc-500 mb-1 truncate">{label}</div>
+                <div className={`text-base md:text-lg font-bold font-mono truncate ${tone}`}>{value}</div>
+            </div>
+        );
+
+        const NoticeStrip = ({ type = "neutral", children, onDismiss }) => {
+            const style = "bg-[#14130F]/95 border-yellow-900/35 text-yellow-100/80";
+            const label = type === 'warning' || type === 'danger' ? '风险提示' : '提示';
+            return (
+                <div className={`shrink-0 rounded-lg border px-3.5 py-2 text-xs md:text-sm leading-5 flex items-center gap-3 ${style}`}>
+                    <Icons.AlertTriangle size={14} className="shrink-0 text-yellow-500/80" />
+                    <span className="sr-only">{label}</span>
+                    <span className="min-w-0 flex-1">{children}</span>
+                    {onDismiss && (
+                        <button onClick={onDismiss} aria-label="关闭提示" className="shrink-0 text-yellow-700/80 hover:text-yellow-300 transition-colors px-1 leading-none">
+                            ×
+                        </button>
+                    )}
+                </div>
+            );
+        };
+
+        const RULE_TEMPLATES = {
+            s1: {
+                '恐慌中找强势': ['s1_drop', 's1_close', 's1_vol_panic', 's1_inverse'],
+                '趋势突破': ['s1_ma20', 's1_high', 's1_plat'],
+                '均值回归': ['s1_pullback', 's1_shadow', 's1_pm'],
+                '事件驱动': ['s1_surge', 's1_gap', 's1_vol_panic']
+            },
+            s2: {
+                '稳健型': ['s2_ma', 's2_fund', 's2_macd', 's2_super'],
+                '量价型': ['s2_ma', 's2_fund', 's2_vol'],
+                '反转型': ['s2_rsi', 's2_main'],
+                '跟随型': ['s2_ma', 's2_north', 's2_super']
+            },
+            s3: {
+                '保守套件': ['s3_hard', 's3_break', 's3_trail'],
+                '激进套件': ['s3_hard', 's3_trail', 's3_sun'],
+                '量价套件': ['s3_break', 's3_fund', 's3_stag'],
+                '系统性防御': ['s3_hard', 's3_market', 's3_break']
+            }
+        };
+
+        const DEFAULT_PARAMS = {
+            s0_ma: '250', s0_limit: '50', s0_crash: '3',
+            s1_drop: '1.0', s1_vol_panic: '1.5', s1_pm: '13:30', s1_high: '20', s1_plat_days: '20', s1_plat_amp: '10', s1_pullback: '5', s1_shadow: '2', s1_surge: '5',
+            s2_ma: '50', s2_fund: '5', s2_macd: '12/26/9', s2_super: '1', s2_vol: '2.0', s2_rsi_period: '14', s2_rsi_level: '30', s2_main: '10', s2_north_days: '5', s2_north_pct: '0.1',
+            s3_hard: '-8.0', s3_break_ma: '20', s3_break_vol: '1.5', s3_trail: '10', s3_sun: '3', s3_fund: '5', s3_stag_vol: '3.0', s3_stag_gain: '1', s3_market_limit: '50'
+        };
+
+        const createRuleConfig = (overrides = {}) => ({
+            globalTpl: '保守型',
+            s1Tpl: '恐慌中找强势',
+            s2Tpl: '稳健型',
+            s3Tpl: '保守套件',
+            s0Keys: ['s0_ma', 's0_limit', 's0_crash'],
+            s1Keys: [...RULE_TEMPLATES.s1['恐慌中找强势']],
+            s2Keys: [...RULE_TEMPLATES.s2['稳健型']],
+            s3Keys: [...RULE_TEMPLATES.s3['保守套件']],
+            params: { ...DEFAULT_PARAMS },
+            ...overrides,
+            params: { ...DEFAULT_PARAMS, ...(overrides.params || {}) }
+        });
+
+        const normalizeStrategy = (strategy, index = 0) => ({
+            ...strategy,
+            status: strategy.status || 'idle',
+            config: createRuleConfig(strategy.config || (index === 1
+                ? { globalTpl: '激进型', s1Tpl: '趋势突破', s2Tpl: '量价型', s3Tpl: '激进套件', s1Keys: [...RULE_TEMPLATES.s1['趋势突破']], s2Keys: [...RULE_TEMPLATES.s2['量价型']], s3Keys: [...RULE_TEMPLATES.s3['激进套件']] }
+                : index === 2
+                ? { globalTpl: '反转型', s1Tpl: '均值回归', s2Tpl: '反转型', s3Tpl: '保守套件', s1Keys: [...RULE_TEMPLATES.s1['均值回归']], s2Keys: [...RULE_TEMPLATES.s2['反转型']], s3Keys: [...RULE_TEMPLATES.s3['保守套件']] }
+                : {}))
+        });
+
+        const formatToday = () => new Date().toISOString().split('T')[0];
+        const parseReturn = (value) => Number(String(value || '0').replace('%', '').replace('+', '')) || 0;
+        const formatReturn = (value) => `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+        const cleanDisplayText = (value) => String(value || '')
+            .replace(/\s*V1\.2/g, ' 第二版')
+            .replace(/\s*V2\.0/g, ' 第二版')
+            .replace(/\s*\(V1\.0\)/g, '')
+            .replace(/\[L\d+:/g, '[')
+            .replace(/L\d+:/g, '')
+            .replace(/MACD/g, '趋势指标')
+            .replace(/RSI/g, '超卖指标')
+            .trim();
+        const dataSourceName = (provider) => provider === 'akshare' ? '收盘行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+
+        const countSelectedRules = (config) => (config.s1Keys.length + config.s2Keys.length + config.s3Keys.length);
+        const strategyRuleSummary = (config) => `${config.s1Tpl} / ${config.s2Tpl} / ${config.s3Tpl}，共 ${countSelectedRules(config)} 条规则`;
+
+        const MARKET_SNAPSHOTS = {
+            "2026-05-20": {
+                indexAboveMa: true, limitDownCount: 12, crashDays: 0, marketDrop: 1.25, marketVolRatio: 1.62, ma20Up: true, time: "14:05",
+                stocks: [
+                    { id: '600519', name: '贵州茅台', closeAbovePrev: true, closeAboveOpen: true, highDays: 22, platformDays: 24, platformAmp: 8.6, gapUp: false, pullbackDays: 4, lowerShadowRatio: 1.3, surgePct: 2.8, aboveMa: true, fundSafeDays: 7, macdCross: true, superInflowDays: 2, volRatio: 2.1, rsi: 43, mainInflowPct: 12.4, northDays: 8, northPct: 0.18, backtestReturn: 16.3, maxLoss: -5.2, exitReason: '移动止盈' },
+                    { id: '000001', name: '平安银行', closeAbovePrev: true, closeAboveOpen: true, highDays: 16, platformDays: 18, platformAmp: 9.8, gapUp: true, pullbackDays: 5, lowerShadowRatio: 2.2, surgePct: 5.4, aboveMa: true, fundSafeDays: 6, macdCross: false, superInflowDays: 1, volRatio: 2.4, rsi: 36, mainInflowPct: 9.6, northDays: 5, northPct: 0.12, backtestReturn: 8.7, maxLoss: -4.1, exitReason: '策略止盈' },
+                    { id: '000651', name: '格力电器', closeAbovePrev: false, closeAboveOpen: false, highDays: 9, platformDays: 12, platformAmp: 13.2, gapUp: false, pullbackDays: 2, lowerShadowRatio: 0.8, surgePct: -1.3, aboveMa: false, fundSafeDays: 2, macdCross: false, superInflowDays: 0, volRatio: 1.2, rsi: 28, mainInflowPct: 4.2, northDays: 2, northPct: 0.03, backtestReturn: -8.3, maxLoss: -9.4, exitReason: '硬止损' },
+                    { id: '300750', name: '宁德时代', closeAbovePrev: true, closeAboveOpen: false, highDays: 28, platformDays: 26, platformAmp: 7.4, gapUp: true, pullbackDays: 6, lowerShadowRatio: 1.7, surgePct: 6.1, aboveMa: true, fundSafeDays: 4, macdCross: true, superInflowDays: 2, volRatio: 2.8, rsi: 57, mainInflowPct: 13.1, northDays: 7, northPct: 0.22, backtestReturn: 12.2, maxLoss: -6.5, exitReason: '趋势跟随止盈' },
+                    { id: '000002', name: '万科A', closeAbovePrev: false, closeAboveOpen: true, highDays: 6, platformDays: 14, platformAmp: 11.9, gapUp: false, pullbackDays: 3, lowerShadowRatio: 2.5, surgePct: 1.1, aboveMa: false, fundSafeDays: 1, macdCross: false, superInflowDays: 0, volRatio: 1.4, rsi: 24, mainInflowPct: 11.6, northDays: 1, northPct: 0.02, backtestReturn: -12.1, maxLoss: -14.5, exitReason: '放量破位' }
+                ]
+            },
+            "2026-05-19": {
+                indexAboveMa: false, limitDownCount: 68, crashDays: 1, marketDrop: 0.4, marketVolRatio: 0.9, ma20Up: false, time: "15:00",
+                stocks: []
+            }
+        };
+
+        const HISTORICAL_MARKET = [
+            { date: '2025-03-01', indexAboveMa: true, limitDownCount: 9, crashDays: 0, marketDrop: 1.4, marketVolRatio: 1.8, ma20Up: true, time: '14:10', stocks: [
+                { id: '002594', name: '比亚迪', closeAbovePrev: true, closeAboveOpen: true, highDays: 30, platformDays: 22, platformAmp: 6.6, gapUp: true, pullbackDays: 5, lowerShadowRatio: 1.9, surgePct: 5.8, aboveMa: true, fundSafeDays: 8, macdCross: true, superInflowDays: 2, volRatio: 2.6, rsi: 54, mainInflowPct: 14.2, northDays: 6, northPct: 0.2, backtestReturn: 16.3, maxLoss: -5.1, exitReason: '移动止盈' },
+                { id: '600036', name: '招商银行', closeAbovePrev: false, closeAboveOpen: false, highDays: 10, platformDays: 15, platformAmp: 12.5, gapUp: false, pullbackDays: 2, lowerShadowRatio: 0.7, surgePct: -0.6, aboveMa: false, fundSafeDays: 2, macdCross: false, superInflowDays: 0, volRatio: 1.1, rsi: 31, mainInflowPct: 3.8, northDays: 2, northPct: 0.04, backtestReturn: -7.9, maxLoss: -8.8, exitReason: '硬止损' }
+            ]},
+            { date: '2025-06-12', indexAboveMa: true, limitDownCount: 18, crashDays: 0, marketDrop: 0.6, marketVolRatio: 1.1, ma20Up: true, time: '13:55', stocks: [
+                { id: '600519', name: '贵州茅台', closeAbovePrev: true, closeAboveOpen: true, highDays: 21, platformDays: 20, platformAmp: 8.8, gapUp: false, pullbackDays: 4, lowerShadowRatio: 2.1, surgePct: 3.2, aboveMa: true, fundSafeDays: 5, macdCross: true, superInflowDays: 1, volRatio: 2.0, rsi: 38, mainInflowPct: 10.4, northDays: 5, northPct: 0.12, backtestReturn: 9.3, maxLoss: -4.4, exitReason: '连阳首阴' },
+                { id: '000002', name: '万科A', closeAbovePrev: false, closeAboveOpen: true, highDays: 7, platformDays: 18, platformAmp: 10.5, gapUp: false, pullbackDays: 4, lowerShadowRatio: 2.4, surgePct: 1.8, aboveMa: false, fundSafeDays: 2, macdCross: false, superInflowDays: 0, volRatio: 1.3, rsi: 26, mainInflowPct: 9.1, northDays: 1, northPct: 0.02, backtestReturn: -6.4, maxLoss: -9.2, exitReason: '资金流出' }
+            ]},
+            { date: '2025-10-08', indexAboveMa: true, limitDownCount: 6, crashDays: 0, marketDrop: 1.1, marketVolRatio: 1.55, ma20Up: true, time: '14:20', stocks: [
+                { id: '300750', name: '宁德时代', closeAbovePrev: true, closeAboveOpen: true, highDays: 26, platformDays: 24, platformAmp: 7.1, gapUp: true, pullbackDays: 6, lowerShadowRatio: 1.8, surgePct: 6.5, aboveMa: true, fundSafeDays: 6, macdCross: true, superInflowDays: 2, volRatio: 2.9, rsi: 45, mainInflowPct: 15.8, northDays: 7, northPct: 0.24, backtestReturn: 14.8, maxLoss: -5.9, exitReason: '移动止盈' },
+                { id: '000001', name: '平安银行', closeAbovePrev: true, closeAboveOpen: false, highDays: 13, platformDays: 21, platformAmp: 9.6, gapUp: false, pullbackDays: 5, lowerShadowRatio: 2.0, surgePct: 2.6, aboveMa: true, fundSafeDays: 5, macdCross: false, superInflowDays: 1, volRatio: 2.1, rsi: 34, mainInflowPct: 11.2, northDays: 5, northPct: 0.11, backtestReturn: 5.9, maxLoss: -3.7, exitReason: '策略止盈' }
+            ]}
+        ];
+
+        const numParam = (config, key) => Number(config.params[key]) || Number(DEFAULT_PARAMS[key]) || 0;
+        const marketRuleChecks = (config, market) => [
+            { key: 's0_ma', name: `${config.params.s0_ma}日年线`, pass: !!market.indexAboveMa, val: market.indexAboveMa ? '指数在年线上方' : '指数跌破年线' },
+            { key: 's0_limit', name: '跌停家数', pass: market.limitDownCount <= numParam(config, 's0_limit'), val: `${market.limitDownCount} <= ${config.params.s0_limit}` },
+            { key: 's0_crash', name: '连续暴跌', pass: market.crashDays < numParam(config, 's0_crash'), val: `${market.crashDays} < ${config.params.s0_crash}` }
+        ];
+
+        const s1Checks = (config, market, stock) => ({
+            s1_drop: { name: '大盘跌幅', pass: market.marketDrop >= numParam(config, 's1_drop'), val: `${market.marketDrop}% >= ${config.params.s1_drop}%` },
+            s1_close: { name: '个股收盘价', pass: stock.closeAbovePrev, val: stock.closeAbovePrev ? '收盘 >= 昨收' : '收盘 < 昨收' },
+            s1_vol_panic: { name: '大盘恐慌放量', pass: market.marketVolRatio >= numParam(config, 's1_vol_panic'), val: `量比 ${market.marketVolRatio} >= ${config.params.s1_vol_panic}` },
+            s1_inverse: { name: '个股逆势收阳', pass: stock.closeAboveOpen, val: stock.closeAboveOpen ? '收盘 > 开盘' : '收盘 <= 开盘' },
+            s1_pm: { name: '下午盘确认', pass: market.time >= config.params.s1_pm, val: `${market.time} >= ${config.params.s1_pm}` },
+            s1_ma20: { name: '大盘均线向上', pass: market.ma20Up, val: market.ma20Up ? '20日线向上' : '20日线走弱' },
+            s1_high: { name: '创N日新高', pass: stock.highDays >= numParam(config, 's1_high'), val: `${stock.highDays} >= ${config.params.s1_high}` },
+            s1_plat: { name: '突破盘整平台', pass: stock.platformDays >= numParam(config, 's1_plat_days') && stock.platformAmp < numParam(config, 's1_plat_amp'), val: `${stock.platformDays}日 / 振幅${stock.platformAmp}%` },
+            s1_gap: { name: '跳空高开缺口', pass: stock.gapUp, val: stock.gapUp ? '存在缺口' : '无缺口' },
+            s1_pullback: { name: '回踩不破均线', pass: stock.pullbackDays >= numParam(config, 's1_pullback'), val: `${stock.pullbackDays} >= ${config.params.s1_pullback}` },
+            s1_shadow: { name: '长下影反包', pass: stock.lowerShadowRatio >= numParam(config, 's1_shadow'), val: `${stock.lowerShadowRatio} >= ${config.params.s1_shadow}` },
+            s1_surge: { name: '事件放量异动', pass: stock.surgePct >= numParam(config, 's1_surge'), val: `${stock.surgePct}% >= ${config.params.s1_surge}%` }
+        });
+
+        const s2Checks = (config, stock) => ({
+            s2_ma: { name: '站上均线', pass: stock.aboveMa, val: stock.aboveMa ? `站上${config.params.s2_ma}日线` : `跌破${config.params.s2_ma}日线` },
+            s2_fund: { name: '资金未流出', pass: stock.fundSafeDays >= numParam(config, 's2_fund'), val: `${stock.fundSafeDays} >= ${config.params.s2_fund}` },
+            s2_macd: { name: '指标金叉', pass: stock.macdCross, val: stock.macdCross ? '金叉' : '未金叉' },
+            s2_super: { name: '特大单净流入', pass: stock.superInflowDays >= numParam(config, 's2_super'), val: `${stock.superInflowDays} >= ${config.params.s2_super}` },
+            s2_vol: { name: '成交量放大', pass: stock.volRatio >= numParam(config, 's2_vol'), val: `${stock.volRatio} >= ${config.params.s2_vol}` },
+            s2_rsi: { name: '超卖回升', pass: stock.rsi >= numParam(config, 's2_rsi_level'), val: `${stock.rsi} >= ${config.params.s2_rsi_level}` },
+            s2_main: { name: '主力净流占比', pass: stock.mainInflowPct > numParam(config, 's2_main'), val: `${stock.mainInflowPct}% > ${config.params.s2_main}%` },
+            s2_north: { name: '北向资金增持', pass: stock.northDays >= numParam(config, 's2_north_days') && stock.northPct > numParam(config, 's2_north_pct'), val: `${stock.northDays}日 / ${stock.northPct}%` }
+        });
+
+        const evaluateStock = (stock, market, config) => {
+            const discoverMap = s1Checks(config, market, stock);
+            const entryMap = s2Checks(config, stock);
+            const s1Results = config.s1Keys.map(key => discoverMap[key] ? ({ key, ...discoverMap[key] }) : null).filter(Boolean);
+            const s2Results = config.s2Keys.map(key => entryMap[key] ? ({ key, ...entryMap[key] }) : null).filter(Boolean);
+            const s1Pass = s1Results.every(item => item.pass);
+            const s2Pass = s2Results.every(item => item.pass);
+            return { stock, s1Results, s2Results, s1Pass, s2Pass, pass: s1Pass && s2Pass };
+        };
+
+        const evaluateStrategyOnMarket = (strategy, market) => {
+            const config = strategy?.config ? createRuleConfig(strategy.config) : createRuleConfig();
+            const s0Results = marketRuleChecks(config, market);
+            const s0Pass = s0Results.every(item => item.pass);
+            const stockResults = (market.stocks || []).map(stock => evaluateStock(stock, market, config));
+            const passed = s0Pass ? stockResults.filter(result => result.pass) : [];
+            return { config, s0Results, s0Pass, stockResults, passed };
+        };
+
+        const ruleResultsToDetails = (results) => results.map(item => ({ name: item.name, val: item.val, status: item.pass ? '通过' : '阻断' }));
+
+        const applyExitRules = (stock, market, config) => {
+            let adjustedReturn = stock.backtestReturn;
+            let reason = stock.exitReason;
+            if (config.s3Keys.includes('s3_hard') && stock.maxLoss <= numParam(config, 's3_hard')) {
+                adjustedReturn = Math.max(adjustedReturn, numParam(config, 's3_hard'));
+                reason = '硬止损';
+            }
+            if (config.s3Keys.includes('s3_break') && stock.maxLoss <= -6) {
+                adjustedReturn = Math.min(adjustedReturn, stock.backtestReturn - 1.5);
+                reason = reason === '硬止损' ? reason : '放量跌破均线';
+            }
+            if (config.s3Keys.includes('s3_market') && market.limitDownCount > numParam(config, 's3_market_limit')) {
+                adjustedReturn = Math.min(adjustedReturn, -3);
+                reason = '系统性防御清仓';
+            }
+            if (config.s3Keys.includes('s3_trail') && adjustedReturn > 8) {
+                adjustedReturn = adjustedReturn - 1;
+                reason = '移动止盈';
+            }
+            return { adjustedReturn, reason };
+        };
+
+        const buildMonitorData = (date, appliedStrategy, positions, executedSignalIds) => {
+            const market = MARKET_SNAPSHOTS[date];
+            const readOnlySnapshot = date !== '2026-05-20';
+            if (readOnlySnapshot) return MOCK_DB.monitorActive[date] || { strategyName: '历史快照缺失', funnel: { s0: {status:'neutral', text:'无数据'}, s1: {status:'neutral', text:'无数据'}, s2: {status:'neutral', text:'无数据'} }, details: { s0: [], s1: [], s2: [] }, signals: [] };
+            if (!appliedStrategy) return { strategyName: '无运行策略', funnel: { s0: {status:'neutral', text:'待应用'}, s1: {status:'neutral', text:'未扫描'}, s2: {status:'neutral', text:'未就绪'} }, details: { s0: [], s1: [], s2: [] }, signals: [] };
+            if (!market) return { strategyName: appliedStrategy.name, funnel: { s0: {status:'neutral', text:'无行情'}, s1: {status:'neutral', text:'未扫描'}, s2: {status:'neutral', text:'未就绪'} }, details: { s0: [], s1: [], s2: [] }, signals: [] };
+
+            const positionIds = new Set(positions.map(p => p.id));
+            const blockedIds = new Set([...(executedSignalIds || []), ...positionIds]);
+            const evaluated = evaluateStrategyOnMarket(appliedStrategy, market);
+            const firstCandidate = evaluated.stockResults.find(result => result.s1Results.length || result.s2Results.length);
+            const signals = evaluated.passed
+                .filter(result => !blockedIds.has(result.stock.id))
+                .map(result => ({
+                    id: result.stock.id,
+                    name: result.stock.name,
+                    indicator: result.s2Results.filter(item => item.pass).map(item => item.name).slice(0, 2).join(', '),
+                    reason: result.s1Results.filter(item => item.pass).map(item => item.name).slice(0, 2).join('+') || '策略条件满足',
+                    msg: [...result.s1Results, ...result.s2Results].map(item => `${item.name}:${item.pass ? '通过' : '阻断'}`).join(' / '),
+                    ruleTrace: [...result.s1Results, ...result.s2Results]
+                }));
+            return {
+                strategyName: appliedStrategy.name,
+                funnel: {
+                    s0: { status: evaluated.s0Pass ? 'pass' : 'fail', text: evaluated.s0Pass ? '开机' : '关机' },
+                    s1: { status: evaluated.s0Pass && evaluated.stockResults.some(r => r.s1Pass) ? 'pass' : 'fail', text: `${evaluated.stockResults.filter(r => r.s1Pass).length}只触发` },
+                    s2: { status: signals.length ? 'ready' : 'neutral', text: signals.length ? `${signals.length}只就绪` : '无新信号' }
+                },
+                details: {
+                    s0: ruleResultsToDetails(evaluated.s0Results),
+                    s1: firstCandidate ? ruleResultsToDetails(firstCandidate.s1Results) : [],
+                    s2: firstCandidate ? ruleResultsToDetails(firstCandidate.s2Results) : []
+                },
+                signals
+            };
+        };
+
+        const runBacktest = (config, name, range) => {
+            const strategy = { name, config: createRuleConfig(config) };
+            const normalizedConfig = createRuleConfig(config);
+            const trades = HISTORICAL_MARKET.flatMap(day => {
+                const evaluation = evaluateStrategyOnMarket(strategy, day);
+                if (!evaluation.s0Pass) return [];
+                return evaluation.passed.map((result, index) => {
+                    const exit = applyExitRules(result.stock, day, normalizedConfig);
+                    const entryPrice = 20 + result.stock.volRatio * 12 + index * 3;
+                    return {
+                        id: `${day.date}_${result.stock.id}_${index}`,
+                        code: result.stock.id,
+                        name: result.stock.name,
+                        entry: day.date,
+                        entryPrice: entryPrice.toFixed(1),
+                        exit: day.date.replace(/-\d{2}$/, m => '-' + String(Math.min(28, Number(m.slice(1)) + 7)).padStart(2, '0')),
+                        exitPrice: (entryPrice * (1 + exit.adjustedReturn / 100)).toFixed(1),
+                        return: formatReturn(exit.adjustedReturn),
+                        reason: exit.reason,
+                        maxLoss: result.stock.maxLoss
+                    };
+                });
+            });
+            const totalReturn = trades.reduce((sum, trade) => sum + parseReturn(trade.return), 0);
+            const wins = trades.filter(trade => parseReturn(trade.return) > 0).length;
+            const winRate = trades.length ? `${((wins / trades.length) * 100).toFixed(1)}%` : '0.0%';
+            const maxDrawdown = trades.length ? Math.min(...trades.map(trade => trade.maxLoss || 0)) : 0;
+            const sharpe = trades.length ? Math.max(0.3, (wins + 1) / Math.max(1, trades.length - wins + 1)).toFixed(2) : '0.30';
+            return {
+                id: 'bt_' + Date.now(),
+                name,
+                range,
+                return: formatReturn(totalReturn),
+                winRate,
+                synced: false,
+                strategyId: null,
+                config: createRuleConfig(config),
+                trades: trades.length,
+                details: {
+                    summary: { return: formatReturn(totalReturn), annualized: formatReturn(totalReturn / 2), sharpe, maxDrawdown: formatReturn(maxDrawdown), winRate, trades: trades.length, avgHold: '7天' },
+                    trades
+                }
+            };
+        };
+
+        const buildBacktestDetails = (bt) => bt.details || {
+            summary: { return: bt.return, annualized: bt.return.startsWith('-') ? '-4.8%' : '+18.6%', sharpe: bt.return.startsWith('-') ? '0.62' : '1.46', maxDrawdown: bt.return.startsWith('-') ? '-18.3%' : '-9.8%', winRate: bt.winRate, trades: bt.trades || 24, avgHold: '6天' },
+            trades: [
+                { id: `${bt.id}_t1`, code: '600519', name: '贵州茅台', entry: '2025-03-12', entryPrice: '1580.0', exit: '2025-03-22', exitPrice: '1668.0', return: '+5.6%', reason: '策略止盈' },
+                { id: `${bt.id}_t2`, code: '000001', name: '平安银行', entry: '2025-07-03', entryPrice: '10.2', exit: '2025-07-09', exitPrice: '9.7', return: '-4.9%', reason: '硬止损' },
+                { id: `${bt.id}_t3`, code: '002594', name: '比亚迪', entry: '2025-10-11', entryPrice: '236.0', exit: '2025-10-28', exitPrice: '259.5', return: '+10.0%', reason: '移动止盈' }
+            ]
+        };
+
+        const apiPost = async (path, payload) => {
+            const res = await fetch(path, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error(`API ${path} ${res.status}`);
+            return res.json();
+        };
+
+        const fetchJson = async (path) => {
+            const res = await fetch(path, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`GET ${path} ${res.status}`);
+            return res.json();
+        };
+
+        // ==========================================
+        // 全局模态窗：个股详情
+        // ==========================================
+        const StockDetailModal = ({ stock, onClose }) => {
+            if (!stock) return null;
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+                    <div className="bg-[#16181D] border border-zinc-800/60 rounded-lg w-full max-w-2xl shadow-[0_18px_60px_rgba(0,0,0,0.30)] flex flex-col overflow-hidden">
+                        <div className="h-16 px-6 border-b border-zinc-800/60 flex items-center justify-between bg-[#111216] shrink-0">
+                            <div className="flex flex-col">
+                                <div className="text-lg font-bold text-zinc-100 flex items-center gap-2">
+                                    <span className="text-blue-400">{stock.code}</span>
+                                    <span>{stock.name}</span>
+                                </div>
+                                <div className="text-[10px] text-zinc-500 font-mono mt-0.5">数据快照: {stock.entryDate || stock.entry || '实时'}</div>
+                            </div>
+                            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300 transition-colors bg-zinc-800/50 hover:bg-zinc-800 p-2 rounded-md">
+                                <Icons.XCircle size={20}/>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <div className="flex-1 bg-[#111216] p-4 rounded-lg border border-zinc-800/50">
+                                    <div className="text-xs text-zinc-500 mb-1 font-mono">命中/绑定策略</div>
+                                    <div className="text-sm font-medium text-blue-400 leading-relaxed">{stock.strategyName || '自定义手动操作'}</div>
+                                </div>
+                                <div className="flex-1 bg-[#111216] p-4 rounded-lg border border-zinc-800/50">
+                                    <div className="text-xs text-zinc-500 mb-1 font-mono">核心信息/原因</div>
+                                    <div className="text-sm font-medium text-zinc-200 leading-relaxed">{stock.reason || stock.msg || stock.return || '暂无详细描述'}</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-zinc-400 mb-3 flex items-center"><Icons.Activity size={16} className="mr-2"/>买入/操作时 K 线快照</h4>
+                                <div className="h-[280px] bg-[#0D0E11] border border-zinc-800/60 rounded-lg flex flex-col items-center justify-center text-zinc-600 font-mono shadow-inner relative overflow-hidden">
+                                    <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
+                                    <Icons.Search size={32} className="mb-2 opacity-50"/>
+                                    [ 图表组件挂载点：K线形态与指标背离示意图 ]
+                                    <div className="mt-4 text-xs bg-zinc-800/50 px-3 py-1 rounded-md text-zinc-500">模拟数据环境，暂无真实图像输出</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 模拟全局初始数据
+        // ==========================================
+        const MOCK_DB = {
+            strategies: [
+                normalizeStrategy({ id: 'str_1', name: '强中强反转突破策略 第二版', status: 'applied', source: '手动创建', updatedAt: '2026-05-18', description: '适用于震荡市与熊市反弹阶段，寻找大盘恐慌放量下跌时逆势收阳的极强个股。' }, 0),
+                normalizeStrategy({ id: 'str_2', name: '稳健均线跟随策略 第二版', status: 'idle', source: '回测同步', updatedAt: '2026-05-15', description: '适合结构性牛市。要求个股站稳50日中线趋势，配合资金持续流入。' }, 1),
+                normalizeStrategy({ id: 'str_3', name: '极度恐慌抄底套件', status: 'idle', source: '手动创建', updatedAt: '2026-05-10', description: '左侧交易策略。寻找超卖后主力资金悄悄介入的标的，快进快出。' }, 2),
+            ],
+            backtests: [
+                { id: 'bt_1', name: '强中强2025全年回测', range: '2025-01-01 ~ 2025-12-31', return: '+45.2%', winRate: '62.5%', synced: true, strategyId: 'str_1' },
+                { id: 'bt_2', name: '稳健均线5年抗压测试', range: '2021-01-01 ~ 2026-01-01', return: '+112.4%', winRate: '55.1%', synced: true, strategyId: 'str_2' },
+                { id: 'bt_3', name: '巨量滞涨离场调优', range: '2025-06-01 ~ 2026-05-01', return: '-5.2%', winRate: '42.0%', synced: false, strategyId: null },
+            ],
+            backtestDetails: {
+                'bt_1': {
+                    summary: { return: '+45.2%', annualized: '+28.5%', sharpe: '1.85', maxDrawdown: '-12.4%', winRate: '62.5%', plRatio: '2.1', trades: 48, avgHold: '5天' },
+                    trades: [
+                        { id: 't1', code: '002594', name: '比亚迪', entry: '2025-03-01', entryPrice: '210.5', exit: '2025-03-10', exitPrice: '245.0', return: '+16.3%', reason: '移动止盈' },
+                        { id: 't2', code: '600036', name: '招商银行', entry: '2025-04-05', entryPrice: '35.2', exit: '2025-04-08', exitPrice: '32.4', return: '-7.9%', reason: '硬止损' },
+                        { id: 't3', code: '600519', name: '贵州茅台', entry: '2025-05-12', entryPrice: '1600.0', exit: '2025-06-01', exitPrice: '1750.0', return: '+9.3%', reason: '连阳首阴' }
+                    ]
+                }
+            },
+            historyTrades: [
+                { id: 'tr_1', code: '002594', name: '比亚迪', entry: '2026-03-01', exit: '2026-04-15', return: '+15.4%', reason: '均线跟随止盈', status: 'DISCIPLINE', cost: 0 },
+                { id: 'tr_2', code: '600036', name: '招商银行', entry: '2026-04-05', exit: '2026-04-10', return: '-8.5%', reason: '硬止损触发', status: 'DISCIPLINE', cost: 0 },
+                { id: 'tr_3', code: '300750', name: '宁德时代', entry: '2026-02-10', exit: '2026-03-20', return: '-12.2%', reason: '放量破位', status: 'VIOLATION', cost: -4500 },
+                { id: 'tr_4', code: '600519', name: '贵州茅台', entry: '2026-01-15', exit: '2026-02-28', return: '+22.1%', reason: '移动止盈回撤', status: 'DISCIPLINE', cost: 0 },
+            ],
+            monitorActive: {
+                "2026-05-20": {
+                    strategyName: "强中强反转突破策略 第二版",
+                    funnel: { s0: { status: 'pass', text: '开机' }, s1: { status: 'pass', text: '触发' }, s2: { status: 'ready', text: '2只就绪' } },
+                    details: {
+                        s0: [ { name: "250日年线", val: "3150 > 3010", status: "通过" }, { name: "跌停家数", val: "12 <= 50家", status: "通过" }, { name: "连续跌幅", val: "未连续3日", status: "通过" } ],
+                        s1: [ { name: "大盘跌幅", val: "-1.25% >= 1%", status: "通过" }, { name: "个股收盘", val: ">= 昨收", status: "通过" }, { name: "恐慌放量", val: "量比1.12 < 1.5", status: "阻断" } ],
+                        s2: [ { name: "站上50日线", val: "2只满足", status: "通过" }, { name: "资金流出限制", val: "连续5日安全", status: "通过" }, { name: "个股成交额", val: ">= 5000万", status: "阻断(4只)" } ]
+                    },
+                    signals: [
+                        { id: '600519', name: '贵州茅台', indicator: '量比:2.1, 站上50日', reason: '大盘恐慌+个股逆势' },
+                        { id: '000001', name: '平安银行', indicator: '量比:2.4, 站上50日', reason: '下午盘止跌确认' }
+                    ]
+                },
+                "2026-05-19": {
+                    strategyName: "稳健均线跟随策略 第二版",
+                    funnel: { s0: { status: 'fail', text: '关机' }, s1: { status: 'fail', text: '未触发' }, s2: { status: 'fail', text: '未就绪' } },
+                    details: { s0: [ { name: "250日年线", val: "2980 < 3010", status: "阻断" }, { name: "跌停家数", val: "68 > 50家", status: "阻断" } ], s1: [], s2: [] },
+                    signals: []
+                }
+            },
+            monitorPositions: [
+                { id: '601318', name: '中国平安', entryDate: '05-11', entryPrice: '42.10', profit: '+4.2%', status: 'normal', msg: '正常持股' },
+                { id: '000651', name: '格力电器', entryDate: '05-01', entryPrice: '38.50', profit: '-8.3%', status: 'warning', msg: '硬止损触发' },
+                { id: '000002', name: '万科A', entryDate: '04-12', entryPrice: '10.20', profit: '-14.5%', status: 'danger', msg: '[违规持有3天]' },
+            ]
+        };
+
+        // ==========================================
+        // 配置中心模块：RuleConfigurator
+        // ==========================================
+        const RuleConfigurator = ({ config, onChange }) => {
+            const cfg = createRuleConfig(config || {});
+            const updateConfig = (patch) => onChange(createRuleConfig({ ...cfg, ...patch }));
+            const updateParams = (patch) => updateConfig({ params: { ...cfg.params, ...patch } });
+
+            const handleGlobalChange = (tpl) => {
+                const map = {
+                    '保守型': ['恐慌中找强势', '稳健型', '保守套件'],
+                    '激进型': ['趋势突破', '量价型', '激进套件'],
+                    '反转型': ['均值回归', '反转型', '保守套件'],
+                    '事件型': ['事件驱动', '跟随型', '系统性防御']
+                };
+                if (!map[tpl]) return updateConfig({ globalTpl: tpl });
+                const [s1Tpl, s2Tpl, s3Tpl] = map[tpl];
+                updateConfig({
+                    globalTpl: tpl,
+                    s1Tpl, s2Tpl, s3Tpl,
+                    s1Keys: [...RULE_TEMPLATES.s1[s1Tpl]],
+                    s2Keys: [...RULE_TEMPLATES.s2[s2Tpl]],
+                    s3Keys: [...RULE_TEMPLATES.s3[s3Tpl]]
+                });
+            };
+
+            const applyStepTpl = (step, tplName) => {
+                if (tplName === '自定义') return updateConfig({ globalTpl: '自定义', [`${step}Tpl`]: '自定义' });
+                updateConfig({ globalTpl: '自定义', [`${step}Tpl`]: tplName, [`${step}Keys`]: [...RULE_TEMPLATES[step][tplName]] });
+            };
+
+            const handleKeyToggle = (step, key) => {
+                const field = `${step}Keys`;
+                const keys = cfg[field] || [];
+                updateConfig({ globalTpl: '自定义', [`${step}Tpl`]: '自定义', [field]: keys.includes(key) ? keys.filter(k => k !== key) : [...keys, key] });
+            };
+
+            const TplBtnGroup = ({ options, active, onChange }) => (
+                <div className="flex flex-wrap gap-2 mb-4">
+                {options.map(opt => (
+                    <button key={opt} onClick={() => onChange(opt)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all border ${active === opt ? 'bg-zinc-700 text-zinc-100 border-zinc-500' : 'bg-[#111216] text-zinc-500 border-zinc-800 hover:text-zinc-300 hover:border-zinc-700'}`}>
+                    {opt}
+                    </button>
+                ))}
+                </div>
+            );
+
+            const CheckItem = ({ active, onToggle, title, paramNode }) => (
+                <label onClick={(e) => { e.preventDefault(); onToggle(); }} className={`flex items-start space-x-3 text-zinc-300 cursor-pointer p-2.5 rounded-md transition-all border ${active ? 'bg-zinc-800/40 border-zinc-700' : 'border-transparent hover:bg-zinc-800/20'}`}>
+                <input type="checkbox" checked={active} readOnly className="accent-green-600 w-4 h-4 mt-0.5 rounded-md border-zinc-700" />
+                <div className="flex flex-col space-y-1 w-full">
+                    <span className={`font-bold ${active ? 'text-zinc-200' : 'text-zinc-500'}`}>{title}</span>
+                    {paramNode && <span className={`text-xs ${active ? 'text-zinc-400' : 'text-zinc-600'}`}>{paramNode}</span>}
+                </div>
+                </label>
+            );
+
+            const ParamInput = ({ id, w = "w-10", color = "text-blue-400" }) => (
+                <input type="text" value={cfg.params[id] || ''} onChange={(e)=>updateParams({ [id]: e.target.value })} onClick={(e)=>e.stopPropagation()} className={`${w} bg-zinc-900 border border-zinc-700 rounded-md px-1 text-center ${color} outline-none focus:border-blue-500 transition-colors mx-1`}/>
+            );
+
+            return (
+                <div className="space-y-8">
+
+                <section className="bg-[#111216] border border-zinc-800/60 rounded-lg p-5">
+                    <div className="flex items-center space-x-3 mb-4">
+                    <Icons.SlidersHorizontal size={18} className="text-zinc-400" />
+                    <h3 className="text-sm font-bold text-zinc-200">全局配置向导</h3>
+                    </div>
+                    <TplBtnGroup options={['保守型', '激进型', '反转型', '事件型', '自定义']} active={cfg.globalTpl} onChange={handleGlobalChange} />
+                    <div className="text-xs text-zinc-500 font-mono"><span className="text-yellow-500/80 mr-1">ⓘ</span> 切换全局模板将自动为您组装最佳条件。手动修改任意条件将跳回"自定义"。</div>
+                </section>
+
+                <section>
+                    <h3 className="text-sm font-bold text-zinc-400 mb-4 flex items-center font-mono">
+                    <span className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-300 flex items-center justify-center mr-2">0</span> 市场环境 (全局必选)
+                    </h3>
+                    <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-5 grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-sm">
+                    <CheckItem active={true} onToggle={()=>{}} title="大盘在N日线上方" paramNode={<>参数: <ParamInput id="s0_ma" />日</>} />
+                    <CheckItem active={true} onToggle={()=>{}} title="跌停家数 ≤ N家" paramNode={<>参数: ≤ <ParamInput id="s0_limit" />家</>} />
+                    <CheckItem active={true} onToggle={()=>{}} title="未连续N日暴跌" paramNode={<>参数: 未连续 <ParamInput id="s0_crash" />日跌超1%</>} />
+                    </div>
+                </section>
+
+                <section>
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4">
+                    <h3 className="text-sm font-bold text-zinc-400 flex items-center font-mono mb-3 md:mb-0">
+                        <span className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-300 flex items-center justify-center mr-2">1</span> 发现 (选股)
+                    </h3>
+                    <TplBtnGroup options={['恐慌中找强势', '趋势突破', '均值回归', '事件驱动', '自定义']} active={cfg.s1Tpl} onChange={(t) => applyStepTpl('s1', t)} />
+                    </div>
+                    <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-5 grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-sm">
+                    <CheckItem active={cfg.s1Keys.includes('s1_drop')} onToggle={()=>handleKeyToggle('s1','s1_drop')} title="大盘跌幅" paramNode={<>参数: ≥ <ParamInput id="s1_drop" /> %</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_close')} onToggle={()=>handleKeyToggle('s1','s1_close')} title="个股收盘价" paramNode={<>条件: 收盘 ≥ 昨收</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_vol_panic')} onToggle={()=>handleKeyToggle('s1','s1_vol_panic')} title="大盘恐慌放量" paramNode={<>参数: 量比 ≥ <ParamInput id="s1_vol_panic" /></>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_inverse')} onToggle={()=>handleKeyToggle('s1','s1_inverse')} title="个股逆势收阳" paramNode={<>条件: 收盘 {'>'} 开盘</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_pm')} onToggle={()=>handleKeyToggle('s1','s1_pm')} title="下午盘止跌确认" paramNode={<>参数: 时间 ≥ <ParamInput id="s1_pm" w="w-16" /></>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_ma20')} onToggle={()=>handleKeyToggle('s1','s1_ma20')} title="大盘均线向上" paramNode={<>条件: 20日均线向上</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_high')} onToggle={()=>handleKeyToggle('s1','s1_high')} title="创N日新高" paramNode={<>参数: 创 <ParamInput id="s1_high" />日新高</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_plat')} onToggle={()=>handleKeyToggle('s1','s1_plat')} title="突破盘整平台" paramNode={<>近<ParamInput id="s1_plat_days"/>日振幅 {'<'} <ParamInput id="s1_plat_amp"/>%</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_gap')} onToggle={()=>handleKeyToggle('s1','s1_gap')} title="跳空高开缺口" paramNode={<>条件: 当日低点 {'>'} 前日高点</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_pullback')} onToggle={()=>handleKeyToggle('s1','s1_pullback')} title="回踩不破均线" paramNode={<>参数: 近 <ParamInput id="s1_pullback" /> 日回踩确认</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_shadow')} onToggle={()=>handleKeyToggle('s1','s1_shadow')} title="长下影反包" paramNode={<>参数: 下影线 ≥ 实体 <ParamInput id="s1_shadow" /> 倍</>} />
+                    <CheckItem active={cfg.s1Keys.includes('s1_surge')} onToggle={()=>handleKeyToggle('s1','s1_surge')} title="事件放量异动" paramNode={<>参数: 涨幅 ≥ <ParamInput id="s1_surge" />%</>} />
+                    </div>
+                </section>
+
+                <section>
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4">
+                    <h3 className="text-sm font-bold text-zinc-400 flex items-center font-mono mb-3 md:mb-0">
+                        <span className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-300 flex items-center justify-center mr-2">2</span> 进场筛选
+                    </h3>
+                    <TplBtnGroup options={['稳健型', '量价型', '反转型', '跟随型', '自定义']} active={cfg.s2Tpl} onChange={(t) => applyStepTpl('s2', t)} />
+                    </div>
+                    <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-5 grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-sm">
+                    <CheckItem active={cfg.s2Keys.includes('s2_ma')} onToggle={()=>handleKeyToggle('s2','s2_ma')} title="站上均线" paramNode={<>参数: 站上 <ParamInput id="s2_ma" /> 日均线</>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_fund')} onToggle={()=>handleKeyToggle('s2','s2_fund')} title="资金未流出" paramNode={<>参数: 连续 <ParamInput id="s2_fund" /> 日</>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_macd')} onToggle={()=>handleKeyToggle('s2','s2_macd')} title="指标金叉" paramNode={<>参数: 周期 <ParamInput id="s2_macd" w="w-16"/></>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_super')} onToggle={()=>handleKeyToggle('s2','s2_super')} title="特大单净流入" paramNode={<>参数: 持续 <ParamInput id="s2_super"/> 日</>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_vol')} onToggle={()=>handleKeyToggle('s2','s2_vol')} title="成交量放大" paramNode={<>参数: 量比 ≥ <ParamInput id="s2_vol" /></>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_rsi')} onToggle={()=>handleKeyToggle('s2','s2_rsi')} title="超卖回升" paramNode={<>周期 <ParamInput id="s2_rsi_period"/>, 阈值 <ParamInput id="s2_rsi_level"/></>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_main')} onToggle={()=>handleKeyToggle('s2','s2_main')} title="主力净流占比" paramNode={<>参数: 占比 {'>'} <ParamInput id="s2_main"/>%</>} />
+                    <CheckItem active={cfg.s2Keys.includes('s2_north')} onToggle={()=>handleKeyToggle('s2','s2_north')} title="北向资金增持" paramNode={<>近<ParamInput id="s2_north_days"/>日增持 {'>'} <ParamInput id="s2_north_pct"/>%</>} />
+                    </div>
+                </section>
+
+                <section>
+                    <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-4">
+                    <h3 className="text-sm font-bold text-zinc-400 flex items-center font-mono mb-3 md:mb-0">
+                        <span className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-300 flex items-center justify-center mr-2">3</span> 离场与风控
+                    </h3>
+                    <TplBtnGroup options={['保守套件', '激进套件', '量价套件', '系统性防御', '自定义']} active={cfg.s3Tpl} onChange={(t) => applyStepTpl('s3', t)} />
+                    </div>
+                    <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-5 grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-sm">
+                    <CheckItem active={cfg.s3Keys.includes('s3_hard')} onToggle={()=>handleKeyToggle('s3','s3_hard')} title="硬止损" paramNode={<>阈值: <ParamInput id="s3_hard" color="text-red-400"/> %</>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_break')} onToggle={()=>handleKeyToggle('s3','s3_break')} title="放量跌破均线" paramNode={<>破<ParamInput id="s3_break_ma"/>日线, 倍率<ParamInput id="s3_break_vol"/></>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_trail')} onToggle={()=>handleKeyToggle('s3','s3_trail')} title="移动止盈(均线)" paramNode={<>参数: 跌破 <ParamInput id="s3_trail"/> 日线</>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_sun')} onToggle={()=>handleKeyToggle('s3','s3_sun')} title="连阳后首阴" paramNode={<>参数: 连阳 ≥ <ParamInput id="s3_sun"/> 日</>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_fund')} onToggle={()=>handleKeyToggle('s3','s3_fund')} title="资金连续流出" paramNode={<>参数: 连续 <ParamInput id="s3_fund"/> 日</>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_stag')} onToggle={()=>handleKeyToggle('s3','s3_stag')} title="单日巨量滞涨" paramNode={<>量比{'>'}<ParamInput id="s3_stag_vol"/>, 涨幅{'<'}<ParamInput id="s3_stag_gain"/>%</>} />
+                    <CheckItem active={cfg.s3Keys.includes('s3_market')} onToggle={()=>handleKeyToggle('s3','s3_market')} title="系统性防御清仓" paramNode={<>参数: 跌停家数 {'>'} <ParamInput id="s3_market_limit"/> 家</>} />
+                    </div>
+                </section>
+
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 子视图：1. 监控页 (Monitor)
+        // ==========================================
+        const ViewMonitor = ({ appliedStrategy, positions, setPositions, historyTrades, setHistoryTrades, executedSignalIds, setExecutedSignalIds, apiStatus, staticScan, onShowToast, onOpenStockDetail }) => {
+            const [currentDate, setCurrentDate] = useState("2026-05-20");
+            const [expandedSteps, setExpandedSteps] = useState({ s0: false, s1: true, s2: false });
+            const [remoteData, setRemoteData] = useState(null);
+            const [showNotice, setShowNotice] = useState(true);
+            const hasStaticScan = apiStatus.status === 'static' && staticScan?.ok;
+            const staticDate = staticScan?.tradeDate;
+            const isStaticDate = hasStaticScan && currentDate === staticDate;
+            const isLiveDate = !hasStaticScan && currentDate === "2026-05-20";
+            const localData = buildMonitorData(currentDate, appliedStrategy, positions, executedSignalIds);
+            const staticData = isStaticDate ? {
+                strategyName: staticScan.strategyName || '收盘扫描策略',
+                funnel: staticScan.funnel,
+                details: staticScan.details || { s0: [], s1: [], s2: [] },
+                signals: staticScan.signals || [],
+                provider: staticScan.provider,
+                warnings: staticScan.warnings || [],
+                runAt: staticScan.runAt,
+                tradeDate: staticScan.tradeDate
+            } : null;
+            const activeData = staticData || (isLiveDate && remoteData ? { ...remoteData, strategyName: appliedStrategy?.name || '无运行策略' } : localData);
+            const signals = activeData.signals;
+            const dataNoticeType = activeData?.provider === 'mock' || apiStatus.provider === 'local' ? 'warning' : 'neutral';
+            const dataNotice = staticData
+                ? (staticData.provider === 'mock'
+                    ? `当前为收盘静态样本数据，最后生成时间 ${staticData.runAt || '--'}，适合验证 GitHub 半自动版流程。`
+                    : `当前为 ${staticData.tradeDate || '--'} 收盘后自动生成的观察清单，最后更新时间 ${staticData.runAt || '--'}。`)
+                : remoteData?.provider === 'mock'
+                ? '当前扫描已降级到样本数据，适合展示产品流程，不适合作为真实交易依据。'
+                : apiStatus.provider === 'local'
+                ? '本地接口未连接，页面正在使用前端样本数据展示。'
+                : '当前页面用于策略流程演示，请结合数据源状态理解扫描结果。';
+            const dateOptions = [
+                ...(staticDate ? [{ value: staticDate, label: `${staticDate} 收盘扫描` }] : []),
+                { value: "2026-05-20", label: "2026-05-20 本地演示" },
+                { value: "2026-05-19", label: "2026-05-19 历史复盘" }
+            ].filter((option, index, arr) => arr.findIndex(item => item.value === option.value) === index);
+            const signalTitle = staticData ? '收盘观察信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
+
+            useEffect(() => {
+                if (staticDate) setCurrentDate(staticDate);
+            }, [staticDate]);
+
+            useEffect(() => {
+                let cancelled = false;
+                if (!isLiveDate || !appliedStrategy || apiStatus.status !== 'online') {
+                    setRemoteData(null);
+                    return;
+                }
+                apiPost('/api/a/scan', {
+                    config: appliedStrategy.config,
+                    executedSignalIds,
+                    positionIds: positions.map(p => p.id)
+                }).then(data => {
+                    if (cancelled) return;
+                    setRemoteData({
+                        funnel: data.funnel,
+                        details: data.details,
+                        signals: data.signals || [],
+                        provider: data.provider,
+                        warnings: data.warnings || []
+                    });
+                }).catch(() => {
+                    if (!cancelled) setRemoteData(null);
+                });
+                return () => { cancelled = true; };
+            }, [isLiveDate, appliedStrategy?.id, JSON.stringify(appliedStrategy?.config || {}), positions.length, executedSignalIds.join(','), apiStatus.status]);
+
+            const toggleStep = (step) => setExpandedSteps(p => ({ ...p, [step]: !p[step] }));
+
+            const handleBuy = (stock) => {
+                if (!isLiveDate) return onShowToast(staticData ? '收盘快照为只读，只生成次日观察清单' : '历史复盘为只读，不能下单');
+                if (positions.some(p => p.id === stock.id)) return onShowToast(`【${stock.name}】已在持仓中`);
+                setExecutedSignalIds([...new Set([...executedSignalIds, stock.id])]);
+                setPositions([{ id: stock.id, name: stock.name, entryDate: currentDate, entryPrice: '已委托', profit: '0.0%', status: 'normal', msg: '刚买入', strategyName: activeData.strategyName }, ...positions]);
+                onShowToast(`已下达【${stock.name}】买入委托`);
+            };
+
+            const handleSell = (id, name) => {
+                if (!isLiveDate) return onShowToast('历史复盘为只读，不能离场');
+                const target = positions.find(p => p.id === id);
+                if (target) {
+                    const newHistoryRec = {
+                        id: 'tr_' + Date.now(),
+                        code: target.id,
+                        name: target.name,
+                        entry: target.entryDate || '未知',
+                        exit: currentDate,
+                        return: target.profit,
+                        reason: '手动操作 (平仓/斩仓)',
+                        status: target.status === 'danger' ? 'VIOLATION' : 'DISCIPLINE',
+                        cost: target.status === 'danger' ? -500 : 0
+                    };
+                    setHistoryTrades([newHistoryRec, ...historyTrades]);
+                }
+                setPositions(positions.filter(p => p.id !== id));
+                onShowToast(`已执行【${name}】离场并同步至历史`);
+            };
+
+            return (
+                <PageShell>
+                    <PageHeader
+                        eyebrow={hasStaticScan ? "GitHub 半自动版" : "本地策略原型"}
+                        title={hasStaticScan ? "收盘策略复盘" : "策略监控台"}
+                        subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "把大盘开关、买入信号和持仓风控放在同一张工作台里，适合演示策略运行流程。"}
+                        actions={
+                            <>
+                                <div className="flex items-center space-x-2 bg-zinc-900/80 px-3 py-1.5 rounded-md border border-zinc-800 w-fit">
+                                    <Icons.Calendar size={14} className="text-zinc-400" />
+                                    <span className="text-xs text-zinc-400 shrink-0">观测日期</span>
+                                    <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer">
+                                        {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                </div>
+                            </>
+                        }
+                        stats={
+                            <>
+                                <StatBlock label="当前策略" value={cleanDisplayText(activeData.strategyName) || '未应用'} tone={activeData.strategyName !== "无运行策略" ? 'text-blue-400' : 'text-zinc-500'} />
+                                <StatBlock label={hasStaticScan ? "观察信号" : "买入信号"} value={`${signals.length} 只`} tone={signals.length ? 'text-green-400' : 'text-zinc-400'} helper={isLiveDate ? '今日候选' : '历史复盘'} />
+                                <StatBlock label="模拟持仓" value={`${positions.length} 笔`} tone={positions.length ? 'text-blue-300' : 'text-zinc-400'} helper="当前持仓" />
+                                <StatBlock label="市场开关" value={activeData.funnel.s0.text} tone={activeData.funnel.s0.status === 'pass' ? 'text-green-400' : 'text-red-400'} helper="大盘环境" />
+                            </>
+                        }
+                    />
+
+                    {showNotice && <NoticeStrip type={dataNoticeType} onDismiss={() => setShowNotice(false)}>{dataNotice}</NoticeStrip>}
+
+                    <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 overflow-visible min-h-min">
+                        <Card title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>} className="w-full lg:w-[360px] shrink-0 min-h-[350px]" bodyClass="p-4 space-y-4">
+                            <div className="flex items-center text-xs font-mono space-x-1.5 text-zinc-400 flex-wrap gap-y-2 mb-2">
+                                <span>S0</span><Badge type={activeData.funnel.s0.status}>{activeData.funnel.s0.text}</Badge><Icons.ChevronRight size={12} className="text-zinc-600"/>
+                                <span>S1</span><Badge type={activeData.funnel.s1.status}>{activeData.funnel.s1.text}</Badge><Icons.ChevronRight size={12} className="text-zinc-600"/>
+                                <span>S2</span><Badge type={activeData.funnel.s2.status}>{activeData.funnel.s2.text}</Badge>
+                            </div>
+                            {['s0', 's1', 's2'].map((step, idx) => (
+                            <div key={step} className="bg-[#111216] border border-zinc-800/60 rounded-lg overflow-hidden shrink-0">
+                                <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-zinc-800/50" onClick={() => toggleStep(step)}>
+                                    <div className="flex items-center space-x-2 text-sm">
+                                        {expandedSteps[step] ? <Icons.ChevronDown size={14} className="text-zinc-500"/> : <Icons.ChevronRight size={14} className="text-zinc-500"/>}
+                                        <span className="font-mono text-zinc-300">{idx===0?'第 0 步：市场环境':idx===1?'第 1 步：发现阶段':'第 2 步：进场筛选'}</span>
+                                    </div>
+                                    <Badge type={activeData.funnel[step].status}>{activeData.funnel[step].text}</Badge>
+                                </div>
+                                {expandedSteps[step] && activeData.details[step].length > 0 && (
+                                <div className="px-3 pb-3 pt-1 font-mono text-xs text-zinc-400 leading-6">
+                                    {activeData.details[step].map((item, i, arr) => (
+                                    <div key={i} className="flex flex-col sm:flex-row sm:justify-between hover:bg-zinc-800/30 px-2 rounded-md py-1">
+                                        <div className="flex space-x-2"><span className="text-zinc-600 hidden sm:inline">{i === arr.length - 1 ? '└──' : '├──'}</span><span>{item.name} : <span className="text-zinc-500">{item.val}</span></span></div>
+                                        <span className={`sm:text-right mt-1 sm:mt-0 ${item.status === '通过' ? 'text-green-500/80' : 'text-red-500/80'}`}>{item.status.includes('阻断') ? `[${item.status}]` : `[${item.status}]`}</span>
+                                    </div>
+                                    ))}
+                                </div>
+                                )}
+                            </div>
+                            ))}
+                        </Card>
+
+                        <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0 pb-2">
+                            <Card title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" bodyClass="p-0 overflow-x-auto">
+                                <table className="w-full text-sm text-left min-w-[500px]">
+                                    <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
+                                        <tr><th className="py-3 px-4 font-normal">代码</th><th className="py-3 px-4 font-normal">名称</th><th className="py-3 px-4 font-normal">命中原因</th><th className="py-3 px-4 font-normal text-right">操作</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
+                                        {signals.map(row => (
+                                            <tr key={row.id} className="hover:bg-zinc-800/30 group">
+                                            <td className="py-3 px-4 text-blue-400 cursor-pointer hover:underline" onClick={() => onOpenStockDetail({...row, code: row.id, strategyName: activeData.strategyName})}>{row.id}</td>
+                                            <td className="py-3 px-4 text-zinc-200 font-sans">{row.name}</td><td className="py-3 px-4 text-zinc-400">{row.reason}</td>
+                                            <td className="py-3 px-4 text-right"><button disabled={!isLiveDate} onClick={() => handleBuy(row)} className={`text-xs border px-3 py-1 rounded-md transition-colors ${isLiveDate ? 'bg-green-950 text-green-400 border-green-800/60 hover:bg-green-900' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '购买' : '只读'}</button></td>
+                                            </tr>
+                                        ))}
+                                        {signals.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-zinc-600">暂无信号</td></tr>}
+                                    </tbody>
+                                </table>
+                            </Card>
+
+                            <Card title={<><Icons.Briefcase className="mr-2 text-blue-500" size={16}/>当前持仓风控<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{positions.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" bodyClass="p-0 overflow-x-auto">
+                                <table className="w-full text-sm text-left min-w-[600px]">
+                                    <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
+                                        <tr><th className="py-3 px-4 font-normal">代码</th><th className="py-3 px-4 font-normal font-sans">名称</th><th className="py-3 px-4 font-normal">浮动盈亏</th><th className="py-3 px-4 font-normal font-sans">离场信号/锁定</th><th className="py-3 px-4 font-normal text-right font-sans">操作</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
+                                        {positions.map(row => {
+                                        let rowStyle = "hover:bg-zinc-800/30"; let profitStyle = row.profit.startsWith('+') ? "text-green-500" : (row.profit.startsWith('-') ? "text-red-500" : "text-zinc-400");
+                                        let msgStyle = "text-zinc-500 font-sans text-xs"; let btn = <span className="text-zinc-600">--</span>;
+                                        if (row.status === 'warning') {
+                                            rowStyle = "bg-yellow-950/20 hover:bg-yellow-950/30"; msgStyle = "text-yellow-500 font-sans text-xs font-medium";
+                                            btn = <button disabled={!isLiveDate} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${isLiveDate ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700/60' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '离场' : '只读'}</button>;
+                                        } else if (row.status === 'danger') {
+                                            rowStyle = "bg-red-950/20 hover:bg-red-950/30"; msgStyle = "text-red-400 font-sans text-xs font-bold";
+                                            btn = <button disabled={!isLiveDate} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${isLiveDate ? 'bg-red-900/80 text-white border-red-700' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '斩仓' : '只读'}</button>;
+                                        }
+                                        return (
+                                            <tr key={row.id} className={`${rowStyle} transition-colors group`}>
+                                            <td className="py-3 px-4 text-blue-400 cursor-pointer hover:underline" onClick={() => onOpenStockDetail({...row, code: row.id, strategyName: activeData.strategyName, reason: row.msg})} >{row.id}</td>
+                                            <td className="py-3 px-4 text-zinc-200 font-sans">{row.name}</td><td className={`py-3 px-4 ${profitStyle}`}>{row.profit}</td>
+                                            <td className="py-3 px-4 flex items-center space-x-1.5">{row.status === 'danger' && <Icons.AlertTriangle size={14} className="text-red-500 shrink-0" />}<span className={msgStyle}>{cleanDisplayText(row.msg)}</span></td>
+                                            <td className="py-3 px-4 text-right">{btn}</td>
+                                            </tr>
+                                        )
+                                        })}
+                                        {positions.length === 0 && <tr><td colSpan="5" className="text-center py-8 text-zinc-600">暂无持仓 (数据已同步保存)</td></tr>}
+                                    </tbody>
+                                </table>
+                            </Card>
+                        </div>
+                    </div>
+                </PageShell>
+            );
+        };
+
+        // ==========================================
+        // 子视图：2. 策略页 (Strategy)
+        // ==========================================
+        const ViewStrategy = ({ strategies, setStrategies, appliedId, setAppliedId, onShowToast }) => {
+            const [activeCardId, setActiveCardId] = useState(strategies[0]?.id);
+            const activeStrategy = strategies.find(s => s.id === activeCardId) || strategies[0];
+
+            const handleCreateStrategy = () => {
+                const newStrategy = {
+                    id: 'str_' + Date.now(),
+                    name: '新建自定义策略',
+                    status: 'idle',
+                    source: '手动创建',
+                    updatedAt: new Date().toISOString().split('T')[0],
+                    description: '新建的自定义策略，请配置下方的规则与参数。',
+                    config: createRuleConfig({ globalTpl: '自定义' })
+                };
+                setStrategies([newStrategy, ...strategies]);
+                setActiveCardId(newStrategy.id);
+            };
+
+            const handleNameChange = (e) => {
+                const newName = e.target.value;
+                setStrategies(strategies.map(s => s.id === activeCardId ? { ...s, name: newName } : s));
+            };
+
+            const handleDeleteStrategy = (e, id, name) => {
+                e.stopPropagation();
+                if(!confirm(`确定删除策略【${name}】吗？`)) return;
+                const newStrategies = strategies.filter(s => s.id !== id);
+                setStrategies(newStrategies);
+                if (activeCardId === id) setActiveCardId(newStrategies[0]?.id || null);
+                if (appliedId === id) setAppliedId(null);
+                onShowToast(`策略【${name}】已删除`);
+            };
+
+            const updateActiveStrategy = (patch) => {
+                setStrategies(strategies.map(s => s.id === activeCardId ? normalizeStrategy({ ...s, ...patch, updatedAt: formatToday() }) : s));
+            };
+
+            const handleConfigChange = (nextConfig) => {
+                updateActiveStrategy({ config: nextConfig, description: strategyRuleSummary(nextConfig) });
+            };
+
+            const handleApply = () => {
+                setAppliedId(activeStrategy.id);
+                setStrategies(strategies.map(s => ({ ...s, status: s.id === activeStrategy.id ? 'applied' : 'idle' })));
+                onShowToast(`已应用【${activeStrategy.name}】`);
+            };
+
+            const handleCancelApply = () => {
+                setAppliedId(null);
+                setStrategies(strategies.map(s => ({ ...s, status: 'idle' })));
+                onShowToast('已取消当前运行策略');
+            };
+
+            return (
+                <PageShell>
+                    <PageHeader
+                        eyebrow="策略配置"
+                        title="策略规则配置"
+                        subtitle="把发现信号、入场确认和离场纪律拆成可调规则，方便对比不同策略套件。"
+                        stats={
+                            <>
+                                <StatBlock label="策略数量" value={`${strategies.length} 套`} tone="text-zinc-100" helper="策略库" />
+                                <StatBlock label="运行状态" value={activeStrategy?.id === appliedId ? '运行中' : '未应用'} tone={activeStrategy?.id === appliedId ? 'text-green-400' : 'text-zinc-400'} helper={cleanDisplayText(activeStrategy?.name) || '无'} />
+                                <StatBlock label="规则数量" value={activeStrategy?.config ? `${countSelectedRules(activeStrategy.config)} 条` : '0 条'} tone="text-blue-300" helper="当前选中" />
+                                <StatBlock label="更新时间" value={activeStrategy?.updatedAt || '--'} tone="text-zinc-300" helper="最后更新" />
+                            </>
+                        }
+                    />
+                    <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 overflow-visible w-full min-h-min">
+                    <Card
+                        title={<><Icons.FileText className="mr-2 text-zinc-400" size={16}/>策略库</>}
+                        actions={<button onClick={handleCreateStrategy} className="text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-800/50 hover:bg-zinc-800 p-1 rounded-md"><Icons.Plus size={16} /></button>}
+                        className="w-full md:w-80 shrink-0 h-[350px] md:h-fit"
+                        bodyClass="p-3 space-y-3 overflow-y-auto"
+                    >
+                        {strategies.length === 0 && <div className="text-zinc-600 text-center text-sm py-4">策略库为空，请新建</div>}
+                        {strategies.map(s => {
+                            const isSelected = s.id === activeCardId;
+                            const isApplied = s.id === appliedId;
+                            return (
+                            <div key={s.id} onClick={() => setActiveCardId(s.id)}
+                                className={`p-3 rounded-lg cursor-pointer border transition-all group ${isSelected ? 'bg-zinc-800/80 border-zinc-500' : 'bg-[#111216] border-zinc-800/50 hover:border-zinc-700'}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="font-bold text-sm text-zinc-200 truncate pr-2">{cleanDisplayText(s.name)}</div>
+                                    <button onClick={(e) => handleDeleteStrategy(e, s.id, s.name)} className="text-zinc-500 hover:text-red-400 transition-colors p-0.5 -mt-0.5 -mr-0.5"><Icons.Trash2 size={14}/></button>
+                                </div>
+                                <div className="text-xs text-zinc-500 truncate mb-2">{cleanDisplayText(s.description)}</div>
+                                <div className="text-[10px] text-zinc-600 truncate mb-2 font-mono">{s.config ? strategyRuleSummary(s.config) : '未配置规则'}</div>
+                                <div className="flex justify-between items-center text-xs font-mono">
+                                    <span className="text-zinc-500">{s.updatedAt}</span>
+                                    {isApplied ? <span className="text-green-400 flex items-center"><Icons.CheckCircle2 size={12} className="mr-1"/> 应用中</span> : <span className="text-zinc-600">未应用</span>}
+                                </div>
+                            </div>
+                            );
+                        })}
+                    </Card>
+
+                    <Card
+                        className="flex-1 min-w-0"
+                        bodyClass="p-4 md:p-8"
+                        title={
+                            activeStrategy ? (
+                                <div className="flex flex-col py-1">
+                                    <input type="text" value={cleanDisplayText(activeStrategy.name)} onChange={handleNameChange} placeholder="请输入策略名称"
+                                        className="text-lg md:text-xl font-bold text-zinc-100 bg-transparent hover:bg-zinc-800/50 focus:bg-[#111216] focus:ring-1 focus:ring-zinc-700 outline-none rounded-md px-2 -ml-2 transition-colors w-[200px] md:w-[400px]" />
+                                    <p className="text-[10px] font-mono text-zinc-500 ml-1 mt-0.5">来源: {activeStrategy.source} | 最后更新: {activeStrategy.updatedAt}</p>
+                                </div>
+                            ) : "未选择策略"
+                        }
+                        actions={
+                            activeStrategy && (
+                                <div className="flex space-x-3 shrink-0">
+                                    <button onClick={() => onShowToast('配置已保存到策略库')} className="px-3 md:px-4 py-1.5 rounded-md border border-zinc-700 text-zinc-300 text-sm font-medium hover:bg-zinc-800 transition-colors flex items-center whitespace-nowrap">
+                                        <Icons.Save size={14} className="mr-2"/> 保存
+                                    </button>
+                                    {appliedId === activeStrategy.id ? (
+                                        <button onClick={handleCancelApply} className="px-3 md:px-4 py-1.5 rounded-md bg-zinc-800 text-red-400 text-sm font-medium hover:bg-zinc-700 transition-colors flex items-center border border-zinc-700 whitespace-nowrap">
+                                        <Icons.XCircle size={14} className="mr-2"/> 取消应用
+                                        </button>
+                                    ) : (
+                                        <button onClick={handleApply} className="px-3 md:px-4 py-1.5 rounded-md bg-green-700 text-white text-sm font-medium hover:bg-green-600 transition-colors flex items-center whitespace-nowrap">
+                                        <Icons.Zap size={14} className="mr-2"/> 立即应用
+                                        </button>
+                                    )}
+                                </div>
+                            )
+                        }
+                    >
+                        {activeStrategy ? <RuleConfigurator config={activeStrategy.config} onChange={handleConfigChange} /> : <div className="flex h-full items-center justify-center text-zinc-600 font-mono">请在左侧选择或新建一个策略</div>}
+                    </Card>
+                    </div>
+                </PageShell>
+            );
+        }
+
+        // ==========================================
+        // 子视图：3. 历史复盘页 (History)
+        // ==========================================
+        const ViewHistory = ({ historyTrades, onOpenStockDetail }) => {
+            const [showNotice, setShowNotice] = useState(true);
+            const totalReturn = historyTrades.reduce((sum, tr) => sum + parseReturn(tr.return), 0);
+            const wins = historyTrades.filter(tr => parseReturn(tr.return) > 0).length;
+            const disciplined = historyTrades.filter(tr => tr.status === 'DISCIPLINE').length;
+            const cost = historyTrades.reduce((sum, tr) => sum + Number(tr.cost || 0), 0);
+            const winRate = historyTrades.length ? `${((wins / historyTrades.length) * 100).toFixed(1)}%` : '0.0%';
+            const disciplineRate = historyTrades.length ? `${((disciplined / historyTrades.length) * 100).toFixed(1)}%` : '0.0%';
+            return (
+            <PageShell>
+                <PageHeader
+                    eyebrow="交易复盘"
+                    title="历史交易复盘"
+                    subtitle="把收益、胜率和纪律执行放在同一张截图里，突出这套工具的复盘价值。"
+                    stats={
+                        <>
+                            <StatBlock label="总收益" value={formatReturn(totalReturn)} tone={totalReturn >= 0 ? 'text-green-400' : 'text-red-400'} helper="系统总收益" />
+                            <StatBlock label="胜率" value={winRate} tone="text-zinc-100" helper="策略胜率" />
+                            <StatBlock label="纪律执行" value={disciplineRate} tone="text-blue-300" helper="纪律执行率" />
+                            <StatBlock label="违规成本" value={`￥${cost.toLocaleString()}`} tone="text-red-400" helper="累计违规成本" />
+                        </>
+                    }
+                />
+                {showNotice && <NoticeStrip type="neutral" onDismiss={() => setShowNotice(false)}>历史记录来自本地模拟交易，用于复盘规则执行过程；截图发布时建议保留“原型演示”语境。</NoticeStrip>}
+
+                <Card title="历史交易明细库" className="flex-1" bodyClass="p-0 overflow-x-auto">
+                    <table className="w-full text-sm text-left min-w-[700px]">
+                        <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
+                            <tr><th className="py-3 px-6 font-normal">代码名称</th><th className="py-3 px-6 font-normal">入场 / 离场日期</th><th className="py-3 px-6 font-normal">最终收益</th><th className="py-3 px-6 font-normal">离场原因</th><th className="py-3 px-6 font-normal text-right">纪律状态</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
+                            {historyTrades.map(tr => (
+                            <tr key={tr.id} className="hover:bg-zinc-800/30 transition-colors">
+                                <td className="py-3 px-6"><div className="text-blue-400 cursor-pointer hover:underline" onClick={() => onOpenStockDetail({code: tr.code, name: tr.name, reason: tr.reason, return: tr.return, entryDate: tr.entry})}>{tr.code}</div><div className="text-xs text-zinc-500 font-sans">{tr.name}</div></td>
+                                <td className="py-3 px-6 text-zinc-400 flex items-center mt-2">{tr.entry} <Icons.ArrowRight size={12} className="mx-2 text-zinc-600"/> {tr.exit}</td>
+                                <td className={`py-3 px-6 text-lg font-bold ${tr.return.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{tr.return}</td>
+                                <td className="py-3 px-6 text-zinc-400 text-xs">{cleanDisplayText(tr.reason)}</td>
+                                <td className="py-3 px-6 text-right">
+                                {tr.status === 'DISCIPLINE' ? <Badge type="pass">纪律离场</Badge> : <div className="flex flex-col items-end"><Badge type="fail">违规离场</Badge><span className="text-[10px] text-red-500/80 mt-1">成本: {tr.cost}元</span></div>}
+                                </td>
+                            </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </Card>
+            </PageShell>
+            );
+        };
+
+        // ==========================================
+        // 子视图：4. 回测页 (Backtest)
+        // ==========================================
+        const ViewBacktest = ({ strategies, setStrategies, backtests, setBacktests, apiStatus, onShowToast }) => {
+            const [detailId, setDetailId] = useState(null);
+            const [isCreating, setIsCreating] = useState(false);
+            const [showNotice, setShowNotice] = useState(true);
+            const [draft, setDraft] = useState({ name: '未命名回测 202605', range: '2025-01-01 ~ 2026-01-01', capital: '100000', config: createRuleConfig() });
+
+            const handleImport = (bt) => {
+                const newStrategy = {
+                    id: 'str_' + Date.now(),
+                    name: bt.name + ' (回测导入)', status: 'idle', source: '回测导入',
+                    updatedAt: new Date().toISOString().split('T')[0],
+                    description: `这是从历史回测任务 [${bt.name}] 中导入的策略配置。`,
+                    config: createRuleConfig(bt.config || {})
+                };
+                setStrategies([newStrategy, ...strategies]);
+                setBacktests(backtests.map(item => item.id === bt.id ? { ...item, synced: true, strategyId: newStrategy.id } : item));
+                onShowToast(`已成功将【${bt.name}】导入至策略库`);
+            };
+
+            const handleStartBacktest = () => {
+                if (!draft.name.trim()) return onShowToast('请输入回测名称');
+                if (apiStatus.status === 'online') {
+                    apiPost('/api/a/backtest', { config: draft.config, name: draft.name.trim(), range: draft.range })
+                        .then(data => {
+                            const newBt = data.backtest;
+                            setBacktests([newBt, ...backtests]);
+                            setDetailId(newBt.id);
+                            setIsCreating(false);
+                            onShowToast(`回测【${newBt.name}】已完成 (${dataSourceName(data.provider)})`);
+                        })
+                        .catch(() => {
+                            const newBt = runBacktest(draft.config, draft.name.trim(), draft.range);
+                            setBacktests([newBt, ...backtests]);
+                            setDetailId(newBt.id);
+                            setIsCreating(false);
+                            onShowToast(`回测【${newBt.name}】已完成 (本地引擎)`);
+                        });
+                    return;
+                }
+                const newBt = runBacktest(draft.config, draft.name.trim(), draft.range);
+                setBacktests([newBt, ...backtests]);
+                setDetailId(newBt.id);
+                setIsCreating(false);
+                onShowToast(`回测【${newBt.name}】已完成 (本地引擎)`);
+            };
+
+            const handleDelete = (id, name) => {
+                if(confirm(`确定删除回测记录【${name}】吗？`)){
+                    setBacktests(backtests.filter(b => b.id !== id));
+                    onShowToast(`回测记录【${name}】已删除`);
+                }
+            };
+
+            if (isCreating) {
+                return (
+                <PageShell>
+                    <PageHeader
+                        eyebrow="新建回测"
+                        title="新建历史回测"
+                        subtitle="选择规则参数后启动本地引擎，当前结果用于流程演示和策略配置沉淀。"
+                        actions={
+                            <>
+                                <button onClick={() => setIsCreating(false)} className="text-zinc-400 hover:text-zinc-200 flex items-center text-sm font-medium transition-colors">
+                                    <Icons.ArrowRight className="mr-1 rotate-180" size={14} /> 取消
+                                </button>
+                                <button onClick={handleStartBacktest} className="px-4 py-1.5 rounded-md bg-blue-700 text-white font-medium hover:bg-blue-600 transition-colors flex items-center text-sm">
+                                    启动引擎
+                                </button>
+                            </>
+                        }
+                    />
+                    <Card
+                        className="flex-1"
+                        title={<div className="flex items-center text-lg text-zinc-100"><Icons.Play size={18} className="mr-2 text-blue-500"/>回测参数</div>}
+                    >
+                        <div className="mb-6 flex flex-wrap gap-6 items-center font-mono text-sm bg-[#111216] p-4 rounded-lg border border-zinc-800/50">
+                            <div className="flex flex-col"><span className="text-zinc-500 text-xs mb-1">回测名称</span><input type="text" value={draft.name} onChange={(e)=>setDraft({...draft, name: e.target.value})} className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-zinc-200 outline-none focus:border-blue-500 w-48"/></div>
+                            <div className="flex flex-col"><span className="text-zinc-500 text-xs mb-1">回测区间</span><input type="text" value={draft.range} onChange={(e)=>setDraft({...draft, range: e.target.value})} className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-zinc-200 outline-none focus:border-blue-500 w-56"/></div>
+                            <div className="flex flex-col"><span className="text-zinc-500 text-xs mb-1">初始资金</span><input type="number" value={draft.capital} onChange={(e)=>setDraft({...draft, capital: e.target.value})} className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-1.5 text-zinc-200 outline-none focus:border-blue-500 w-32"/></div>
+                        </div>
+                        <RuleConfigurator config={draft.config} onChange={(config)=>setDraft({...draft, config})} />
+                    </Card>
+                </PageShell>
+                );
+            }
+
+            if (detailId) {
+                const bt = backtests.find(b => b.id === detailId);
+                if (!bt) return null;
+                const details = MOCK_DB.backtestDetails[detailId] || buildBacktestDetails(bt);
+                return (
+                <PageShell>
+                    <PageHeader
+                        eyebrow="回测结果"
+                        title={`回测详情：${bt.name}`}
+                        subtitle={`测试区间：${bt.range}。当前回测结果用于验证策略流程和展示配置沉淀。`}
+                        actions={<button onClick={() => setDetailId(null)} className="text-zinc-400 hover:text-zinc-200 flex items-center text-sm font-medium transition-colors"><Icons.ArrowRight className="mr-1 rotate-180" size={14} /> 返回列表</button>}
+                        stats={
+                            <>
+                                <StatBlock label="总收益" value={details.summary.return} tone={details.summary.return.startsWith('+') ? 'text-green-400' : 'text-red-400'} helper="回测收益" />
+                                <StatBlock label="夏普比率" value={details.summary.sharpe} tone="text-zinc-100" helper="收益波动比" />
+                                <StatBlock label="最大回撤" value={details.summary.maxDrawdown} tone="text-red-400" helper="最大亏损区间" />
+                                <StatBlock label="交易笔数" value={`${details.summary.trades} 笔`} tone="text-blue-300" helper={`胜率 ${details.summary.winRate}`} />
+                            </>
+                        }
+                    />
+                    <Card
+                        title="回测明细"
+                        className="flex-1" bodyClass="p-4 md:p-6 flex flex-col gap-6"
+                    >
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 shrink-0">
+                            <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-4"><div className="text-zinc-500 text-xs font-mono mb-1">总收益</div><div className="text-xl font-bold text-green-500">{details.summary.return}</div></div>
+                            <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-4"><div className="text-zinc-500 text-xs font-mono mb-1">夏普比率</div><div className="text-xl font-bold text-zinc-200">{details.summary.sharpe}</div></div>
+                            <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-4"><div className="text-zinc-500 text-xs font-mono mb-1">最大回撤</div><div className="text-xl font-bold text-red-500">{details.summary.maxDrawdown}</div></div>
+                            <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-4"><div className="text-zinc-500 text-xs font-mono mb-1">胜率</div><div className="text-xl font-bold text-blue-400">{details.summary.winRate}</div></div>
+                            <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-4"><div className="text-zinc-500 text-xs font-mono mb-1">交易笔数</div><div className="text-xl font-bold text-zinc-200">{details.summary.trades} 笔</div></div>
+                        </div>
+                        <div className="bg-[#111216] border border-zinc-800/60 rounded-lg p-6 flex items-center justify-center text-zinc-600 font-mono h-48 shadow-inner shrink-0">
+                            [ 图表占位：此处渲染 ECharts 净值曲线与基准对比图 ]
+                        </div>
+                        <div className="flex-1 border border-zinc-800/60 rounded-lg overflow-hidden flex flex-col min-h-[300px]">
+                            <div className="h-10 px-4 border-b border-zinc-800/60 flex items-center bg-[#111216] shrink-0"><h3 className="text-sm font-bold text-zinc-300">交易明细快照</h3></div>
+                            <div className="flex-1 overflow-auto">
+                                <table className="w-full text-sm text-left min-w-[600px]">
+                                <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
+                                    <tr><th className="py-3 px-4 font-normal">代码名称</th><th className="py-3 px-4 font-normal">入场时间/价格</th><th className="py-3 px-4 font-normal">离场时间/价格</th><th className="py-3 px-4 font-normal">收益率</th><th className="py-3 px-4 font-normal text-right">离场原因</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
+                                    {details.trades.map(t => (
+                                    <tr key={t.id} className="hover:bg-zinc-800/30 transition-colors">
+                                        <td className="py-3 px-4"><div className="text-blue-400">{t.code}</div><div className="text-xs text-zinc-500 font-sans">{t.name}</div></td>
+                                        <td className="py-3 px-4 text-zinc-400">{t.entry} <br/> <span className="text-zinc-300">￥{t.entryPrice}</span></td>
+                                        <td className="py-3 px-4 text-zinc-400">{t.exit} <br/> <span className="text-zinc-300">￥{t.exitPrice}</span></td>
+                                        <td className={`py-3 px-4 font-bold ${t.return.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{t.return}</td>
+                                        <td className="py-3 px-4 text-right text-xs text-zinc-400">{t.reason}</td>
+                                    </tr>
+                                    ))}
+                                    {details.trades.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-zinc-600">当前规则在样本区间内没有产生交易</td></tr>}
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </Card>
+                </PageShell>
+                );
+            }
+
+            return (
+                <PageShell>
+                    <PageHeader
+                        eyebrow="回测任务"
+                        title="回测任务大厅"
+                        subtitle="集中展示回测记录、同步状态和策略导入入口，适合截取为项目能力总览。"
+                        actions={<button onClick={() => setIsCreating(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors"><Icons.Plus size={14} className="mr-1" /> 新建回测</button>}
+                        stats={
+                            <>
+                                <StatBlock label="回测任务" value={`${backtests.length} 个`} tone="text-zinc-100" helper="回测记录" />
+                                <StatBlock label="已导入" value={`${backtests.filter(bt => bt.synced).length} 个`} tone="text-green-400" helper="已导入策略库" />
+                                <StatBlock label="最高收益" value={backtests[0]?.return || '--'} tone={backtests[0]?.return?.startsWith('+') ? 'text-green-400' : 'text-zinc-400'} helper="列表首项" />
+                                <StatBlock label="引擎状态" value={apiStatus.label} tone={apiStatus.status === 'online' ? 'text-blue-300' : 'text-zinc-400'} helper="本地状态" />
+                            </>
+                        }
+                    />
+                    {showNotice && <NoticeStrip type="warning" onDismiss={() => setShowNotice(false)}>当前回测用于原型演示，尚未覆盖滑点、手续费、停牌、涨跌停和严格逐日持仓逻辑。</NoticeStrip>}
+                    <Card
+                        title={<><Icons.Activity className="mr-2 text-blue-500" size={16}/>回测记录</>}
+                        className="flex-1" bodyClass="p-0 overflow-x-auto"
+                    >
+                        <table className="w-full text-sm text-left min-w-[700px]">
+                        <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
+                            <tr><th className="py-3 px-4 font-normal">回测名称</th><th className="py-3 px-4 font-normal">测试区间</th><th className="py-3 px-4 font-normal">总收益</th><th className="py-3 px-4 font-normal">胜率</th><th className="py-3 px-4 font-normal">同步</th><th className="py-3 px-4 font-normal text-right">操作</th></tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
+                            {backtests.map(bt => (
+                            <tr key={bt.id} className="hover:bg-zinc-800/30 transition-colors group">
+                                <td className="py-3 px-4 font-sans text-zinc-200">{bt.name}</td>
+                                <td className="py-3 px-4 text-zinc-400">{bt.range}</td>
+                                <td className={`py-3 px-4 font-bold ${bt.return.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{bt.return}</td>
+                                <td className="py-3 px-4 text-blue-400">{bt.winRate}</td>
+                                <td className="py-3 px-4">{bt.synced ? <Badge type="pass">已导入</Badge> : <Badge type="neutral">未导入</Badge>}</td>
+                                <td className="py-3 px-4 text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <button
+                                            onClick={() => setDetailId(bt.id)}
+                                            title="查看详情"
+                                            aria-label={`查看${bt.name}详情`}
+                                            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-zinc-800 bg-[#111216] text-zinc-500 hover:text-zinc-200 hover:border-zinc-600 hover:bg-zinc-800/60 transition-colors"
+                                        >
+                                            <Icons.FileText size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleImport(bt)}
+                                            title={bt.synced ? '再次导入策略' : '导入策略'}
+                                            aria-label={`${bt.synced ? '再次导入' : '导入'}${bt.name}到策略库`}
+                                            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-zinc-800 bg-[#111216] text-zinc-500 hover:text-blue-300 hover:border-blue-800/70 hover:bg-blue-950/30 transition-colors"
+                                        >
+                                            <Icons.ArrowRight size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(bt.id, bt.name)}
+                                            title="删除记录"
+                                            aria-label={`删除${bt.name}`}
+                                            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-zinc-800 bg-[#111216] text-zinc-500 hover:text-red-400 hover:border-red-900/70 hover:bg-red-950/30 transition-colors"
+                                        >
+                                            <Icons.Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            ))}
+                            {backtests.length === 0 && <tr><td colSpan="6" className="text-center py-12 text-zinc-600">暂无回测记录</td></tr>}
+                        </tbody>
+                        </table>
+                    </Card>
+                </PageShell>
+            );
+        };
+
+        // ==========================================
+        // 主入口组件
+        // ==========================================
+        function App() {
+            // 顺序要求：监控、历史、策略、回测
+            const initialTab = (() => {
+                const tab = new URLSearchParams(window.location.search).get('tab');
+                return ['监控', '历史', '策略', '回测'].includes(tab) ? tab : '监控';
+            })();
+            const [activeTab, setActiveTab] = useStickyState(initialTab, 'lq_activeTab');
+
+            const [strategies, setStrategies] = useStickyState(MOCK_DB.strategies, 'lq_strategies');
+            const [backtests, setBacktests] = useStickyState(MOCK_DB.backtests, 'lq_backtests');
+            const [positions, setPositions] = useStickyState(MOCK_DB.monitorPositions, 'lq_positions');
+            const [historyTrades, setHistoryTrades] = useStickyState(MOCK_DB.historyTrades, 'lq_history');
+            const [appliedStrategyId, setAppliedStrategyId] = useStickyState(MOCK_DB.strategies[0]?.id, 'lq_appliedId');
+            const [executedSignalIds, setExecutedSignalIds] = useStickyState([], 'lq_executedSignals');
+
+            const [toast, setToast] = useState('');
+            const [selectedStock, setSelectedStock] = useState(null); // { code, name, strategyName, reason... }
+            const [apiStatus, setApiStatus] = useState({ status: 'offline', label: '本地引擎', provider: 'local' });
+            const [staticScan, setStaticScan] = useState(null);
+
+            const normalizedStrategies = strategies.map(normalizeStrategy);
+            const appliedStrategy = normalizedStrategies.find(s => s.id === appliedStrategyId) || null;
+
+            useEffect(() => {
+                let cancelled = false;
+                fetchJson('/api/health')
+                    .then(data => {
+                        if (cancelled) return;
+                        setStaticScan(null);
+                        setApiStatus({ status: 'online', label: dataSourceName(data.provider), provider: data.provider, warnings: data.warnings || [] });
+                    })
+                    .catch(() => {
+                        Promise.all([
+                            fetchJson('public-data/run-status.json'),
+                            fetchJson('public-data/latest-scan.json')
+                        ]).then(([status, latest]) => {
+                            if (cancelled) return;
+                            setStaticScan(latest);
+                            setApiStatus({
+                                status: 'static',
+                                label: dataSourceName(latest.provider || status.provider || 'static'),
+                                provider: latest.provider || status.provider || 'static',
+                                warnings: [...(status.warnings || []), ...(latest.warnings || [])],
+                                runAt: latest.runAt || status.runAt,
+                                tradeDate: latest.tradeDate || status.tradeDate
+                            });
+                        }).catch(() => {
+                            if (!cancelled) setApiStatus({ status: 'offline', label: '本地引擎', provider: 'local' });
+                        });
+                    });
+                return () => { cancelled = true; };
+            }, []);
+
+            useEffect(() => {
+                const tab = new URLSearchParams(window.location.search).get('tab');
+                if (['监控', '历史', '策略', '回测'].includes(tab)) setActiveTab(tab);
+            }, []);
+
+            const showToast = (msg) => {
+                setToast(msg);
+                setTimeout(() => setToast(''), 3000);
+            };
+
+            return (
+                <div className="h-screen w-screen bg-[#0D0E11] text-zinc-300 flex flex-col font-sans select-none overflow-hidden relative">
+                    {/* 个股详情全局弹窗 */}
+                    <StockDetailModal stock={selectedStock} onClose={() => setSelectedStock(null)} />
+
+                    {/* 全局 Toast 提示 */}
+                    {toast && (
+                        <div className="absolute top-16 left-1/2 -translate-x-1/2 bg-zinc-800/95 backdrop-blur-sm text-zinc-100 px-6 py-2.5 rounded-md shadow-[0_18px_60px_rgba(0,0,0,0.30)] z-50 text-sm font-medium border border-zinc-700/80">
+                            {toast}
+                        </div>
+                    )}
+
+                    <div className="h-14 border-b border-zinc-800/60 flex items-center px-4 md:px-6 bg-[#111216] justify-between z-40 shrink-0">
+                        <div className="flex items-center w-full justify-between md:justify-start md:space-x-8">
+                            <div className="flex items-center gap-2.5 shrink-0">
+                                <span className="h-8 w-8 rounded-md border border-green-800/50 bg-green-950/35 flex items-center justify-center" aria-hidden="true"><Icons.LeekMark size={22} /></span>
+                                <div className="hidden sm:flex flex-col justify-center leading-none">
+                                    <span className="text-[15px] leading-4 font-bold text-green-500 tracking-wide">韭菜量化</span>
+                                    <span className="mt-0.5 text-[9px] leading-[10px] font-mono font-medium text-zinc-500 tracking-normal">LINPO LAB</span>
+                                </div>
+                            </div>
+                            <nav className="flex items-stretch space-x-1 md:space-x-2 overflow-x-auto no-scrollbar h-14">
+                                {['监控', '历史', '策略', '回测'].map((item) => (
+                                <button key={item} onClick={() => setActiveTab(item)}
+                                    className={`relative px-2 md:px-3 pt-0.5 text-sm font-medium transition-colors whitespace-nowrap border-b-2 ${activeTab === item ? 'text-zinc-100 border-green-500/80 bg-zinc-900/45' : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-800'}`}>
+                                    {item}
+                                </button>
+                                ))}
+                            </nav>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex overflow-hidden relative w-full bg-[#0D0E11]">
+                        {activeTab === '监控' && <ViewMonitor appliedStrategy={appliedStrategy} positions={positions} setPositions={setPositions} historyTrades={historyTrades} setHistoryTrades={setHistoryTrades} executedSignalIds={executedSignalIds} setExecutedSignalIds={setExecutedSignalIds} apiStatus={apiStatus} staticScan={staticScan} onShowToast={showToast} onOpenStockDetail={setSelectedStock} />}
+                        {activeTab === '历史' && <ViewHistory historyTrades={historyTrades} onOpenStockDetail={setSelectedStock} />}
+                        {activeTab === '策略' && <ViewStrategy strategies={normalizedStrategies} setStrategies={setStrategies} appliedId={appliedStrategyId} setAppliedId={setAppliedStrategyId} onShowToast={showToast} />}
+                        {activeTab === '回测' && <ViewBacktest strategies={normalizedStrategies} setStrategies={setStrategies} backtests={backtests} setBacktests={setBacktests} apiStatus={apiStatus} onShowToast={showToast} />}
+                    </div>
+                </div>
+            );
+        }
+
+        // --- 渲染到 DOM ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+{
+  "ok": true,
+  "mode": "close-scan",
+  "runAt": "2026-07-09 03:24:20",
+  "tradeDate": "2026-05-20",
+  "provider": "mock",
+  "strategyName": "强中强反转突破策略 第二版",
+  "strategyDescription": "收盘后扫描大盘恐慌放量下跌时逆势收阳的强势个股，用于生成次日观察清单。",
+  "warnings": [],
+  "market": {
+    "date": "2026-05-20",
+    "time": "14:05",
+    "indexAboveMa": true,
+    "limitDownCount": 12,
+    "crashDays": 0,
+    "marketDrop": 1.25,
+    "marketVolRatio": 1.62,
+    "ma20Up": true,
+    "stockCount": 3
+  },
+  "funnel": {
+    "s0": {
+      "status": "pass",
+      "text": "开机"
+    },
+    "s1": {
+      "status": "pass",
+      "text": "2只触发"
+    },
+    "s2": {
+      "status": "ready",
+      "text": "1只就绪"
+    }
+  },
+  "details": {
+    "s0": [
+      {
+        "name": "250日年线",
+        "val": "指数在年线上方",
+        "status": "通过"
+      },
+      {
+        "name": "跌停家数",
+        "val": "12 <= 50",
+        "status": "通过"
+      },
+      {
+        "name": "连续暴跌",
+        "val": "0 < 3",
+        "status": "通过"
+      }
+    ],
+    "s1": [
+      {
+        "name": "大盘跌幅",
+        "val": "1.25% >= 1.0%",
+        "status": "通过"
+      },
+      {
+        "name": "个股收盘价",
+        "val": "收盘 >= 昨收",
+        "status": "通过"
+      },
+      {
+        "name": "大盘恐慌放量",
+        "val": "1.62 >= 1.5",
+        "status": "通过"
+      },
+      {
+        "name": "个股逆势收阳",
+        "val": "收盘 > 开盘",
+        "status": "通过"
+      }
+    ],
+    "s2": [
+      {
+        "name": "站上均线",
+        "val": "站上50日线",
+        "status": "通过"
+      },
+      {
+        "name": "资金未流出",
+        "val": "7 >= 5",
+        "status": "通过"
+      },
+      {
+        "name": "指标金叉",
+        "val": "金叉",
+        "status": "通过"
+      },
+      {
+        "name": "特大单净流入",
+        "val": "2 >= 1",
+        "status": "通过"
+      }
+    ]
+  },
+  "signals": [
+    {
+      "id": "600519",
+      "name": "贵州茅台",
+      "indicator": "站上均线, 资金未流出, 指标金叉, 特大单净流入",
+      "reason": "大盘跌幅+个股收盘价+大盘恐慌放量+个股逆势收阳",
+      "msg": "大盘跌幅:通过 / 个股收盘价:通过 / 大盘恐慌放量:通过 / 个股逆势收阳:通过 / 站上均线:通过 / 资金未流出:通过 / 指标金叉:通过 / 特大单净流入:通过"
+    }
+  ]
+}

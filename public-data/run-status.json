@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "mode": "close-scan",
+  "runAt": "2026-07-09 03:24:20",
+  "tradeDate": "2026-05-20",
+  "provider": "mock",
+  "warnings": [],
+  "latestFile": "public-data/latest-scan.json",
+  "marketFile": "public-data/market-snapshot.json",
+  "historyFile": "public-data/history/2026-05-20.json"
+}
