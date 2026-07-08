@@ -1,10 +1,12 @@
 {
   "ok": true,
   "mode": "close-scan",
-  "runAt": "2026-07-09 03:24:20",
+  "runAt": "2026-07-09 03:42:57",
   "tradeDate": "2026-05-20",
   "provider": "mock",
-  "warnings": [],
+  "warnings": [
+    "akshare 行情获取失败，已降级到样本数据: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  ],
   "market": {
     "date": "2026-05-20",
     "indexAboveMa": true,

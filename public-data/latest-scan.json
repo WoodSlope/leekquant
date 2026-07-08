@@ -1,12 +1,14 @@
 {
   "ok": true,
   "mode": "close-scan",
-  "runAt": "2026-07-09 03:24:20",
+  "runAt": "2026-07-09 03:42:57",
   "tradeDate": "2026-05-20",
   "provider": "mock",
   "strategyName": "强中强反转突破策略 第二版",
   "strategyDescription": "收盘后扫描大盘恐慌放量下跌时逆势收阳的强势个股，用于生成次日观察清单。",
-  "warnings": [],
+  "warnings": [
+    "akshare 行情获取失败，已降级到样本数据: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
+  ],
   "market": {
     "date": "2026-05-20",
     "time": "14:05",
