@@ -62,6 +62,14 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("BaoStock 历史日线备用", html)
         self.assertIn("新浪行情兜底", html)
 
+    def test_monitor_notice_explains_data_confidence_tier(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const dataSourceTier =", html)
+        self.assertIn("数据可信层级：历史日线源", html)
+        self.assertIn("数据可信层级：行情兜底源", html)
+        self.assertIn("数据可信层级：样本演示数据", html)
+
     def test_monitor_scan_status_is_in_funnel_card_actions(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
