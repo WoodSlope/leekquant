@@ -38,22 +38,110 @@ class MonitorPageTest(unittest.TestCase):
         self.assertNotIn("eyebrow=", monitor_header)
         self.assertNotIn("本地策略原型", monitor_header)
 
-    def test_monitor_date_picker_is_in_funnel_card_actions(self):
+    def test_monitor_header_explains_close_scan_timing(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
-        self.assertGreater(html.index("观测日期"), html.index("策略漏斗总览"))
+        self.assertIn("基于历史日线和收盘数据执行扫描；每个交易日收盘后生成明日观察清单，不作为盘中实时买卖提醒。", html)
+
+    def test_monitor_scan_status_is_in_funnel_card_actions(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        funnel_card = html[html.index("策略漏斗总览") : html.index("第 0 步：市场环境")]
         self.assertIn("title={<><Icons.Activity className=\"mr-2 text-zinc-400\" size={16}/>策略漏斗总览</>}", html)
-        self.assertIn("actions={", html[html.index("策略漏斗总览") : html.index("第 0 步：市场环境")])
+        self.assertIn("actions={", funnel_card)
+        self.assertIn("{scanDateLabel}", funnel_card)
+        self.assertIn("{scanDateValue}", funnel_card)
 
-    def test_monitor_date_picker_uses_compact_labels(self):
+    def test_monitor_scan_date_is_readonly_until_history_records_exist(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
-        self.assertIn('label: "2026-05-20", title: "本地演示"', html)
-        self.assertIn('label: "2026-05-19", title: "历史复盘"', html)
-        self.assertIn('w-[104px]', html)
-        self.assertIn(">日期</span>", html)
+        self.assertIn('const latestScanDate = remoteData?.tradeDate || remoteData?.providerDate || localDemoDate;', html)
+        self.assertIn("const scanDateLabel = remoteData ? '扫描日期' : awaitingLocalScan ? '扫描状态' : '演示日期';", html)
+        self.assertIn("const scanDateValue = remoteData ? latestScanDate : awaitingLocalScan ? '待扫描' : currentDate;", html)
+        self.assertIn("const scanDateTitle = remoteData ? '最新扫描日期' : awaitingLocalScan ? '尚未执行扫描' : '本地演示日期';", html)
+        self.assertIn("{scanDateLabel}", html)
+        self.assertIn("{scanDateValue}", html)
+        self.assertIn("待扫描", html)
+        self.assertNotIn("<select value={currentDate}", html)
+        self.assertNotIn("dateOptions.map", html)
         self.assertNotIn('label: "2026-05-20 本地演示"', html)
         self.assertNotIn('label: "2026-05-19 历史复盘"', html)
+
+    def test_monitor_scan_uses_provider_date_from_api(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('const scanDate = data.tradeDate || data.providerDate || localDemoDate;', html)
+        self.assertIn("setCurrentDate(scanDate);", html)
+        self.assertIn("providerDate: data.providerDate,", html)
+        self.assertIn("tradeDate: scanDate", html)
+        self.assertNotIn('setCurrentDate("2026-05-20");', html)
+
+    def test_local_monitor_waits_for_manual_scan(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const pendingScanData =", html)
+        self.assertIn("const awaitingLocalScan = apiStatus.status === 'online' && isLiveDate && !remoteData;", html)
+        self.assertIn("点击执行扫描后会按运行策略筛选股票", html)
+        self.assertIn("尚未执行本地扫描", html)
+        self.assertNotIn("handleRunScan({ silent: true", html)
+
+    def test_signal_list_has_board_filter_without_changing_scan_total(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const STOCK_BOARD_OPTIONS =", html)
+        self.assertIn("const stockBoardOf = (code) =>", html)
+        self.assertIn("const [signalBoardFilter, setSignalBoardFilter] = useStickyState('all', 'lq_signalBoardFilter');", html)
+        self.assertIn("const filteredSignals = signalBoardFilter === 'all' ? signals : signals.filter(row => stockBoardOf(row.id) === signalBoardFilter);", html)
+        self.assertIn("当前显示", html)
+        self.assertIn("板块", html)
+        self.assertIn("{filteredSignals.length}", html)
+        self.assertIn("{signals.length}", html)
+        self.assertIn("filteredSignals.map(row =>", html)
+        self.assertIn("当前板块暂无符合条件标的", html)
+
+    def test_signal_board_filter_uses_custom_dark_menu_and_shared_pills(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('const META_PILL_CLASS = "inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-800/80 bg-[#111216] px-3 text-sm shadow-inner shadow-black/20";', html)
+        self.assertIn('const BOARD_FILTER_GROUP_CLASS = "flex items-center gap-3 flex-wrap justify-end";', html)
+        self.assertIn("const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false);", html)
+        self.assertIn("aria-haspopup=\"listbox\"", html)
+        self.assertIn("role=\"listbox\"", html)
+        self.assertIn("role=\"option\"", html)
+        self.assertIn("top-[calc(100%+6px)]", html)
+        self.assertNotIn("<select value={signalBoardFilter}", html)
+
+    def test_local_scan_results_are_saved_and_restored_by_strategy(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const SCAN_DB_NAME = 'leek-strategy-scans';", html)
+        self.assertIn("const SCAN_STORE_NAME = 'scanRecords';", html)
+        self.assertIn("const scanRecordKey = (strategyId) => `strategy:${strategyId}`;", html)
+        self.assertIn("const saveScanRecord = async ({ strategyId, strategyName, data }) =>", html)
+        self.assertIn("const loadLatestScanRecord = async (strategyId) =>", html)
+        self.assertIn("key: scanRecordKey(strategyId)", html)
+        self.assertIn("strategyId: appliedStrategy.id", html)
+        self.assertIn("strategyName: appliedStrategy.name", html)
+        self.assertIn("saveScanRecord({", html)
+        self.assertIn("loadLatestScanRecord(appliedStrategy.id)", html)
+        self.assertIn("setRemoteData(record.data);", html)
+        self.assertIn("setCurrentDate(record.data.tradeDate || record.data.providerDate || localDemoDate);", html)
+
+    def test_holding_actions_do_not_follow_scan_date_readonly_state(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const canOperateHolding = !hasStaticScan;", html)
+        self.assertIn("const holdingActionDate = latestScanDate;", html)
+        self.assertIn("if (!canOperateHolding) return onShowToast('收盘快照为只读，不能离场');", html)
+        self.assertIn("exit: holdingActionDate,", html)
+
+        holding_card = html[html.index("当前持仓风控") : html.index("{positions.length === 0")]
+        self.assertIn("disabled={!canOperateHolding}", holding_card)
+        self.assertIn("canOperateHolding ? '离场' : '只读'", holding_card)
+        self.assertIn("canOperateHolding ? '斩仓' : '只读'", holding_card)
+        self.assertNotIn("disabled={!isLiveDate}", holding_card)
+        self.assertNotIn("isLiveDate ? '离场'", holding_card)
+        self.assertNotIn("isLiveDate ? '斩仓'", holding_card)
 
     def test_monitor_cards_align_header_with_content_edges(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
@@ -88,7 +176,8 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn(">观察日期</span>", funnel_card)
         self.assertIn("{staticDate || '--'}", funnel_card)
         self.assertIn(": (", funnel_card)
-        self.assertIn("<select value={currentDate}", funnel_card)
+        self.assertIn("{scanDateValue}", funnel_card)
+        self.assertNotIn("<select value={currentDate}", funnel_card)
 
     def test_monitor_header_does_not_duplicate_data_source_notice(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="author" content="LINPO LAB">
-    <title>韭菜量化 - LINPO LAB</title>
+    <title>韭菜策略 - LINPO LAB</title>
     <!-- Tailwind CSS (开发版 CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -52,6 +52,55 @@
             }, [key, value]);
             return [value, setValue];
         }
+
+        const SCAN_DB_NAME = 'leek-strategy-scans';
+        const SCAN_STORE_NAME = 'scanRecords';
+        const scanRecordKey = (strategyId) => `strategy:${strategyId}`;
+
+        const openScanDb = () => new Promise((resolve, reject) => {
+            if (!window.indexedDB) {
+                resolve(null);
+                return;
+            }
+            const request = window.indexedDB.open(SCAN_DB_NAME, 1);
+            request.onupgradeneeded = () => {
+                const db = request.result;
+                if (!db.objectStoreNames.contains(SCAN_STORE_NAME)) {
+                    db.createObjectStore(SCAN_STORE_NAME, { keyPath: 'key' });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        const saveScanRecord = async ({ strategyId, strategyName, data }) => {
+            const db = await openScanDb();
+            if (!db || !strategyId || !data) return;
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(SCAN_STORE_NAME, 'readwrite');
+                tx.objectStore(SCAN_STORE_NAME).put({
+                    key: scanRecordKey(strategyId),
+                    strategyId,
+                    strategyName,
+                    savedAt: new Date().toISOString(),
+                    tradeDate: data.tradeDate || data.providerDate || '',
+                    data
+                });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            }).finally(() => db.close());
+        };
+
+        const loadLatestScanRecord = async (strategyId) => {
+            const db = await openScanDb();
+            if (!db || !strategyId) return null;
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(SCAN_STORE_NAME, 'readonly');
+                const request = tx.objectStore(SCAN_STORE_NAME).get(scanRecordKey(strategyId));
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error);
+            }).finally(() => db.close());
+        };
 
         // --- 模拟 SVG 图标库 ---
         const Icons = {
@@ -105,6 +154,12 @@
             };
             return <span className={`border text-xs px-1.5 py-0.5 rounded-md font-mono font-medium ${styles[type] || styles.neutral}`}>{children}</span>;
         };
+
+        const META_PILL_CLASS = "inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-800/80 bg-[#111216] px-3 text-sm shadow-inner shadow-black/20";
+        const META_LABEL_CLASS = "text-xs text-zinc-500 shrink-0";
+        const META_VALUE_CLASS = "text-sm font-mono text-zinc-200 whitespace-nowrap";
+        const META_MENU_CLASS = "absolute right-0 top-[calc(100%+6px)] z-30 min-w-[132px] overflow-hidden rounded-lg border border-zinc-700/80 bg-[#16181D] p-1 shadow-[0_18px_50px_rgba(0,0,0,0.45)]";
+        const BOARD_FILTER_GROUP_CLASS = "flex items-center gap-3 flex-wrap justify-end";
 
         const PageShell = ({ children, className = "" }) => (
             <div className={`flex-1 flex flex-col p-4 md:p-6 overflow-y-auto w-full gap-4 md:gap-5 ${className}`}>
@@ -218,6 +273,20 @@
             .replace(/RSI/g, '超卖指标')
             .trim();
         const dataSourceName = (provider) => provider === 'akshare' ? '收盘行情' : provider === 'sina' ? '备用收盘行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+        const STOCK_BOARD_OPTIONS = [
+            { value: 'all', label: '全部' },
+            { value: 'main', label: '主板' },
+            { value: 'gem', label: '创业板' },
+            { value: 'star', label: '科创板' },
+            { value: 'bj', label: '北交所' }
+        ];
+        const stockBoardOf = (code) => {
+            const value = String(code || '').replace(/\D/g, '');
+            if (value.startsWith('688') || value.startsWith('689')) return 'star';
+            if (value.startsWith('300') || value.startsWith('301')) return 'gem';
+            if (value.startsWith('8') || value.startsWith('4') || value.startsWith('9')) return 'bj';
+            return 'main';
+        };
 
         const countSelectedRules = (config) => (config.s1Keys.length + config.s2Keys.length + config.s3Keys.length);
         const strategyRuleSummary = (config) => `${config.s1Tpl} / ${config.s2Tpl} / ${config.s3Tpl}，共 ${countSelectedRules(config)} 条规则`;
@@ -694,17 +763,34 @@
         // 子视图：1. 监控页 (Monitor)
         // ==========================================
         const ViewMonitor = ({ appliedStrategy, positions, setPositions, historyTrades, setHistoryTrades, executedSignalIds, setExecutedSignalIds, apiStatus, staticScan, onShowToast, onOpenStockDetail }) => {
-            const [currentDate, setCurrentDate] = useState("2026-05-20");
+            const localDemoDate = "2026-05-20";
+            const [currentDate, setCurrentDate] = useState(localDemoDate);
             const [expandedSteps, setExpandedSteps] = useState({ s0: false, s1: true, s2: false });
             const [remoteData, setRemoteData] = useState(null);
             const [showNotice, setShowNotice] = useState(true);
             const [isScanning, setIsScanning] = useState(false);
+            const [signalBoardFilter, setSignalBoardFilter] = useStickyState('all', 'lq_signalBoardFilter');
+            const [isBoardMenuOpen, setIsBoardMenuOpen] = useState(false);
             const hasStaticScan = apiStatus.status === 'static' && staticScan?.ok;
             const staticDate = staticScan?.tradeDate;
+            const latestScanDate = remoteData?.tradeDate || remoteData?.providerDate || localDemoDate;
             const isStaticDate = hasStaticScan && currentDate === staticDate;
-            const isLiveDate = !hasStaticScan && currentDate === "2026-05-20";
+            const isLiveDate = !hasStaticScan && currentDate === latestScanDate;
             const canRunScan = Boolean(appliedStrategy) && apiStatus.status === 'online';
+            const canOperateHolding = !hasStaticScan;
+            const holdingActionDate = latestScanDate;
             const localData = buildMonitorData(currentDate, appliedStrategy, positions, executedSignalIds);
+            const pendingScanData = {
+                strategyName: appliedStrategy?.name || '无运行策略',
+                funnel: {
+                    s0: { status: 'neutral', text: '待扫描' },
+                    s1: { status: 'neutral', text: '待扫描' },
+                    s2: { status: 'neutral', text: '待扫描' }
+                },
+                details: { s0: [], s1: [], s2: [] },
+                signals: [],
+                provider: apiStatus.provider
+            };
             const staticData = isStaticDate ? {
                 strategyName: staticScan.strategyName || '收盘扫描策略',
                 funnel: staticScan.funnel,
@@ -715,8 +801,11 @@
                 runAt: staticScan.runAt,
                 tradeDate: staticScan.tradeDate
             } : null;
-            const activeData = staticData || (isLiveDate && remoteData ? { ...remoteData, strategyName: appliedStrategy?.name || '无运行策略' } : localData);
+            const awaitingLocalScan = apiStatus.status === 'online' && isLiveDate && !remoteData;
+            const activeData = staticData || (isLiveDate && remoteData ? { ...remoteData, strategyName: appliedStrategy?.name || '无运行策略' } : awaitingLocalScan ? pendingScanData : localData);
             const signals = activeData.signals;
+            const filteredSignals = signalBoardFilter === 'all' ? signals : signals.filter(row => stockBoardOf(row.id) === signalBoardFilter);
+            const selectedBoardOption = STOCK_BOARD_OPTIONS.find(option => option.value === signalBoardFilter) || STOCK_BOARD_OPTIONS[0];
             const currentProvider = staticData?.provider || remoteData?.provider || apiStatus.provider || activeData?.provider || 'local';
             const dataSourceLabel = dataSourceName(currentProvider);
             const dataNoticeType = activeData?.provider === 'mock' || apiStatus.provider === 'local' ? 'warning' : 'neutral';
@@ -726,16 +815,18 @@
                     : `当前为 ${staticData.tradeDate || '--'} 收盘后自动生成的观察清单，数据源：${dataSourceLabel}，最后更新时间 ${staticData.runAt || '--'}。`)
                 : remoteData?.provider === 'mock'
                 ? '当前扫描已降级到样本数据，适合展示产品流程，不适合作为真实交易依据。'
+                : awaitingLocalScan
+                ? '本地接口已连接，点击执行扫描后会按运行策略筛选股票。'
+                : remoteData
+                ? `当前为 ${latestScanDate} 本地扫描结果，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。`
                 : apiStatus.provider === 'local'
                 ? '本地接口未连接，页面正在使用前端样本数据展示。'
                 : `当前页面用于策略流程演示，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。`;
-            const dateOptions = [
-                ...(staticDate ? [{ value: staticDate, label: staticDate, title: "收盘扫描" }] : []),
-                { value: "2026-05-20", label: "2026-05-20", title: "本地演示" },
-                { value: "2026-05-19", label: "2026-05-19", title: "历史复盘" }
-            ].filter((option, index, arr) => arr.findIndex(item => item.value === option.value) === index);
-            const selectedDateOption = dateOptions.find(option => option.value === currentDate);
-            const signalTitle = staticData ? '收盘观察信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
+            const scanDateLabel = remoteData ? '扫描日期' : awaitingLocalScan ? '扫描状态' : '演示日期';
+            const scanDateValue = remoteData ? latestScanDate : awaitingLocalScan ? '待扫描' : currentDate;
+            const scanDateTitle = remoteData ? '最新扫描日期' : awaitingLocalScan ? '尚未执行扫描' : '本地演示日期';
+            const signalTitle = staticData ? '收盘观察信号' : remoteData && isLiveDate ? '本地扫描信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
+            const signalStatLabel = hasStaticScan ? "观察信号" : apiStatus.status === 'online' ? "扫描信号" : "买入信号";
             const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';
             const scanButtonTitle = hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新' : canRunScan ? '按当前运行策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
             const scanButtonDisabled = hasStaticScan || isScanning;
@@ -767,14 +858,23 @@
                     positionIds: positions.map(p => p.id)
                 }).then(data => {
                     if (!shouldApply()) return;
-                    setCurrentDate("2026-05-20");
-                    setRemoteData({
+                    const scanDate = data.tradeDate || data.providerDate || localDemoDate;
+                    const nextRemoteData = {
                         funnel: data.funnel,
                         details: data.details,
                         signals: data.signals || [],
                         provider: data.provider,
-                        warnings: data.warnings || []
-                    });
+                        warnings: data.warnings || [],
+                        providerDate: data.providerDate,
+                        tradeDate: scanDate
+                    };
+                    setCurrentDate(scanDate);
+                    setRemoteData(nextRemoteData);
+                    saveScanRecord({
+                        strategyId: appliedStrategy.id,
+                        strategyName: appliedStrategy.name,
+                        data: nextRemoteData
+                    }).catch(error => console.warn('保存本地扫描结果失败', error));
                     const scanSignalCount = (data.signals || []).length;
                     if (!options.silent) onShowToast(`已按【${appliedStrategy.name}】完成扫描：${scanSignalCount} 只候选 (${dataSourceName(data.provider)})`);
                 }).catch(() => {
@@ -788,14 +888,24 @@
 
             useEffect(() => {
                 let cancelled = false;
-                if (!isLiveDate || !canRunScan) {
+                setIsScanning(false);
+                if (hasStaticScan) return () => { cancelled = true; };
+                if (apiStatus.status !== 'online' || !appliedStrategy?.id) {
                     setRemoteData(null);
-                    setIsScanning(false);
-                    return;
+                    setCurrentDate(localDemoDate);
+                    return () => { cancelled = true; };
                 }
-                handleRunScan({ silent: true, shouldApply: () => !cancelled });
+                setRemoteData(null);
+                setCurrentDate(localDemoDate);
+                loadLatestScanRecord(appliedStrategy.id)
+                    .then(record => {
+                        if (cancelled || !record?.data) return;
+                        setRemoteData(record.data);
+                        setCurrentDate(record.data.tradeDate || record.data.providerDate || localDemoDate);
+                    })
+                    .catch(error => console.warn('读取本地扫描结果失败', error));
                 return () => { cancelled = true; };
-            }, [isLiveDate, canRunScan, appliedStrategy?.id, JSON.stringify(appliedStrategy?.config || {}), positions.length, executedSignalIds.join(','), apiStatus.status]);
+            }, [appliedStrategy?.id, apiStatus.status, hasStaticScan]);
 
             const toggleStep = (step) => setExpandedSteps(p => ({ ...p, [step]: !p[step] }));
 
@@ -808,7 +918,7 @@
             };
 
             const handleSell = (id, name) => {
-                if (!isLiveDate) return onShowToast('历史复盘为只读，不能离场');
+                if (!canOperateHolding) return onShowToast('收盘快照为只读，不能离场');
                 const target = positions.find(p => p.id === id);
                 if (target) {
                     const newHistoryRec = {
@@ -816,7 +926,7 @@
                         code: target.id,
                         name: target.name,
                         entry: target.entryDate || '未知',
-                        exit: currentDate,
+                        exit: holdingActionDate,
                         return: target.profit,
                         reason: '手动操作 (平仓/斩仓)',
                         status: target.status === 'danger' ? 'VIOLATION' : 'DISCIPLINE',
@@ -832,7 +942,7 @@
                 <PageShell>
                     <PageHeader
                         title={hasStaticScan ? "收盘策略复盘" : "策略监控台"}
-                        subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "把大盘开关、买入信号和持仓风控放在同一张工作台里，适合演示策略运行流程。"}
+                        subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "基于历史日线和收盘数据执行扫描；每个交易日收盘后生成明日观察清单，不作为盘中实时买卖提醒。"}
                         actions={
                             <button onClick={() => handleRunScan()} disabled={scanButtonDisabled} aria-disabled={!canRunScan || scanButtonDisabled} title={scanButtonTitle} className={scanButtonClass}>
                                 <Icons.Play size={14} className="mr-1" /> {scanButtonText}
@@ -841,7 +951,7 @@
                         stats={
                             <>
                                 <StatBlock label="运行策略" value={cleanDisplayText(activeData.strategyName) || '未应用'} tone={activeData.strategyName !== "无运行策略" ? 'text-blue-400' : 'text-zinc-500'} />
-                                <StatBlock label={hasStaticScan ? "观察信号" : "买入信号"} value={`${signals.length} 只`} tone={signals.length ? 'text-green-400' : 'text-zinc-400'} helper={isLiveDate ? '今日候选' : '历史复盘'} />
+                                <StatBlock label={signalStatLabel} value={`${signals.length} 只`} tone={signals.length ? 'text-green-400' : 'text-zinc-400'} helper={isLiveDate ? '今日候选' : '历史复盘'} />
                                 <StatBlock label="模拟持仓" value={`${positions.length} 笔`} tone={positions.length ? 'text-blue-300' : 'text-zinc-400'} helper="当前持仓" />
                                 <StatBlock label="市场开关" value={activeData.funnel.s0.text} tone={activeData.funnel.s0.status === 'pass' ? 'text-green-400' : 'text-red-400'} helper="大盘环境" />
                             </>
@@ -855,18 +965,16 @@
                             title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>}
                             actions={
                                 hasStaticScan ? (
-                                    <div title="GitHub Pages 只展示最近一次收盘快照" className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
+                                    <div title="GitHub Pages 只展示最近一次收盘快照" className={`${META_PILL_CLASS} w-fit max-w-full`}>
                                         <Icons.Calendar size={13} className="text-zinc-400" />
-                                        <span className="text-xs text-zinc-400 shrink-0">观察日期</span>
-                                        <span className="text-zinc-200 text-sm font-mono whitespace-nowrap">{staticDate || '--'}</span>
+                                        <span className={META_LABEL_CLASS}>观察日期</span>
+                                        <span className={META_VALUE_CLASS}>{staticDate || '--'}</span>
                                     </div>
                                 ) : (
-                                    <div title={selectedDateOption?.title || "选择观测日期"} className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
+                                    <div title={scanDateTitle} className={`${META_PILL_CLASS} w-fit max-w-full`}>
                                         <Icons.Calendar size={13} className="text-zinc-400" />
-                                        <span className="text-xs text-zinc-400 shrink-0">日期</span>
-                                        <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer w-[104px] max-w-[38vw]">
-                                            {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                                        </select>
+                                        <span className={META_LABEL_CLASS}>{scanDateLabel}</span>
+                                        <span className={META_VALUE_CLASS}>{scanDateValue}</span>
                                     </div>
                                 )
                             }
@@ -903,20 +1011,78 @@
                         </Card>
 
                         <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0 pb-2">
-                            <Card title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto">
+                            <Card
+                                title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>}
+                                actions={
+                                    <div className={BOARD_FILTER_GROUP_CLASS}>
+                                        <div className={META_PILL_CLASS}>
+                                            <span className={META_LABEL_CLASS}>当前显示</span>
+                                            <span className={META_VALUE_CLASS}>{filteredSignals.length}</span>
+                                        </div>
+                                        <div
+                                            className="relative"
+                                            onBlur={(event) => {
+                                                if (!event.currentTarget.contains(event.relatedTarget)) setIsBoardMenuOpen(false);
+                                            }}
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsBoardMenuOpen(value => !value)}
+                                                aria-haspopup="listbox"
+                                                aria-expanded={isBoardMenuOpen}
+                                                className={`${META_PILL_CLASS} min-w-[132px] justify-between hover:border-zinc-700 hover:bg-zinc-900/80 transition-colors`}
+                                            >
+                                                <span className="inline-flex items-center gap-2 min-w-0">
+                                                    <Icons.SlidersHorizontal size={13} className="text-zinc-500 shrink-0" />
+                                                    <span className={META_LABEL_CLASS}>板块</span>
+                                                    <span className={`${META_VALUE_CLASS} min-w-0 truncate`}>{selectedBoardOption.label}</span>
+                                                </span>
+                                                <Icons.ChevronDown size={13} className={`text-zinc-500 shrink-0 transition-transform ${isBoardMenuOpen ? 'rotate-180' : ''}`} />
+                                            </button>
+                                            {isBoardMenuOpen && (
+                                                <div role="listbox" className={META_MENU_CLASS}>
+                                                    {STOCK_BOARD_OPTIONS.map(option => {
+                                                        const selected = option.value === signalBoardFilter;
+                                                        return (
+                                                            <button
+                                                                key={option.value}
+                                                                type="button"
+                                                                role="option"
+                                                                aria-selected={selected}
+                                                                onMouseDown={(event) => event.preventDefault()}
+                                                                onClick={() => {
+                                                                    setSignalBoardFilter(option.value);
+                                                                    setIsBoardMenuOpen(false);
+                                                                }}
+                                                                className={`w-full h-8 px-2.5 rounded-md flex items-center justify-between text-sm transition-colors ${selected ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-100'}`}
+                                                            >
+                                                                <span>{option.label}</span>
+                                                                {selected && <Icons.CheckCircle2 size={13} className="text-green-400" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                }
+                                className="min-h-[300px] flex flex-col shrink-0"
+                                headerClass="px-4 py-3"
+                                bodyClass="p-0 overflow-x-auto"
+                            >
                                 <table className="w-full text-sm text-left min-w-[500px]">
                                     <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
                                         <tr><th className="py-3 px-4 font-normal">代码</th><th className="py-3 px-4 font-normal">名称</th><th className="py-3 px-4 font-normal">命中原因</th><th className="py-3 px-4 font-normal text-right">操作</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-zinc-800/40 font-mono text-zinc-300">
-                                        {signals.map(row => (
+                                        {filteredSignals.map(row => (
                                             <tr key={row.id} className="hover:bg-zinc-800/30 group">
                                             <td className="py-3 px-4 text-blue-400 cursor-pointer hover:underline" onClick={() => onOpenStockDetail({...row, code: row.id, strategyName: activeData.strategyName})}>{row.id}</td>
                                             <td className="py-3 px-4 text-zinc-200 font-sans">{row.name}</td><td className="py-3 px-4 text-zinc-400">{row.reason}</td>
                                             <td className="py-3 px-4 text-right"><button disabled={!isLiveDate} onClick={() => handleBuy(row)} className={`text-xs border px-3 py-1 rounded-md transition-colors ${isLiveDate ? 'bg-green-950 text-green-400 border-green-800/60 hover:bg-green-900' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '购买' : '只读'}</button></td>
                                             </tr>
                                         ))}
-                                        {signals.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-zinc-600">暂无信号</td></tr>}
+                                        {filteredSignals.length === 0 && <tr><td colSpan="4" className="text-center py-8 text-zinc-600">{awaitingLocalScan ? '尚未执行本地扫描' : signals.length > 0 ? '当前板块暂无符合条件标的' : remoteData ? '本次扫描未发现符合条件标的' : '暂无信号'}</td></tr>}
                                     </tbody>
                                 </table>
                             </Card>
@@ -932,10 +1098,10 @@
                                         let msgStyle = "text-zinc-500 font-sans text-xs"; let btn = <span className="text-zinc-600">--</span>;
                                         if (row.status === 'warning') {
                                             rowStyle = "bg-yellow-950/20 hover:bg-yellow-950/30"; msgStyle = "text-yellow-500 font-sans text-xs font-medium";
-                                            btn = <button disabled={!isLiveDate} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${isLiveDate ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700/60' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '离场' : '只读'}</button>;
+                                            btn = <button disabled={!canOperateHolding} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${canOperateHolding ? 'bg-yellow-900/60 text-yellow-400 border-yellow-700/60' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{canOperateHolding ? '离场' : '只读'}</button>;
                                         } else if (row.status === 'danger') {
                                             rowStyle = "bg-red-950/20 hover:bg-red-950/30"; msgStyle = "text-red-400 font-sans text-xs font-bold";
-                                            btn = <button disabled={!isLiveDate} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${isLiveDate ? 'bg-red-900/80 text-white border-red-700' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{isLiveDate ? '斩仓' : '只读'}</button>;
+                                            btn = <button disabled={!canOperateHolding} onClick={()=>handleSell(row.id, row.name)} className={`text-xs border px-3 py-1 rounded-md ${canOperateHolding ? 'bg-red-900/80 text-white border-red-700' : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'}`}>{canOperateHolding ? '斩仓' : '只读'}</button>;
                                         }
                                         return (
                                             <tr key={row.id} className={`${rowStyle} transition-colors group`}>
@@ -1024,7 +1190,6 @@
             return (
                 <PageShell>
                     <PageHeader
-                        eyebrow="策略配置"
                         title="策略规则配置"
                         subtitle="把发现信号、入场确认和离场纪律拆成可调规则，方便对比不同策略套件。"
                         stats={
@@ -1108,7 +1273,7 @@
         // ==========================================
         // 子视图：3. 历史复盘页 (History)
         // ==========================================
-        const ViewHistory = ({ historyTrades, onOpenStockDetail }) => {
+        const ViewHistory = ({ historyTrades, setHistoryTrades, onShowToast, onOpenStockDetail }) => {
             const [showNotice, setShowNotice] = useState(true);
             const totalReturn = historyTrades.reduce((sum, tr) => sum + parseReturn(tr.return), 0);
             const wins = historyTrades.filter(tr => parseReturn(tr.return) > 0).length;
@@ -1116,10 +1281,15 @@
             const cost = historyTrades.reduce((sum, tr) => sum + Number(tr.cost || 0), 0);
             const winRate = historyTrades.length ? `${((wins / historyTrades.length) * 100).toFixed(1)}%` : '0.0%';
             const disciplineRate = historyTrades.length ? `${((disciplined / historyTrades.length) * 100).toFixed(1)}%` : '0.0%';
+            const handleClearHistory = () => {
+                if (!historyTrades.length) return;
+                if (!confirm('确定清空全部历史交易记录吗？此操作只会清除本浏览器里的模拟交易历史，无法撤回。')) return;
+                setHistoryTrades([]);
+                onShowToast('历史交易记录已清空');
+            };
             return (
             <PageShell>
                 <PageHeader
-                    eyebrow="交易复盘"
                     title="历史交易复盘"
                     subtitle="把收益、胜率和纪律执行放在同一张截图里，突出这套工具的复盘价值。"
                     stats={
@@ -1133,7 +1303,24 @@
                 />
                 {showNotice && <NoticeStrip type="neutral" onDismiss={() => setShowNotice(false)}>历史记录来自本地模拟交易，用于复盘规则执行过程；截图发布时建议保留“原型演示”语境。</NoticeStrip>}
 
-                <Card title="历史交易明细库" className="flex-1" headerClass="px-6 py-3" bodyClass="p-0 overflow-x-auto">
+                <Card
+                    title="历史交易明细库"
+                    actions={
+                        <button
+                            onClick={handleClearHistory}
+                            disabled={!historyTrades.length}
+                            title={historyTrades.length ? '清空历史交易记录' : '暂无历史交易记录'}
+                            aria-label="清空历史交易记录"
+                            className={`h-8 inline-flex items-center justify-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors ${historyTrades.length ? 'border-red-900/70 bg-[#111216] text-red-400 hover:bg-red-950/30' : 'border-zinc-800 bg-[#111216] text-zinc-600 cursor-not-allowed'}`}
+                        >
+                            <Icons.Trash2 size={14} />
+                            <span>清空记录</span>
+                        </button>
+                    }
+                    className="flex-1"
+                    headerClass="px-6 py-3"
+                    bodyClass="p-0 overflow-x-auto"
+                >
                     <table className="w-full text-sm text-left min-w-[700px]">
                         <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
                             <tr><th className="py-3 px-6 font-normal">代码名称</th><th className="py-3 px-6 font-normal">入场 / 离场日期</th><th className="py-3 px-6 font-normal">最终收益</th><th className="py-3 px-6 font-normal">离场原因</th><th className="py-3 px-6 font-normal text-right">纪律状态</th></tr>
@@ -1150,6 +1337,7 @@
                                 </td>
                             </tr>
                             ))}
+                            {historyTrades.length === 0 && <tr><td colSpan="5" className="text-center py-12 text-zinc-600">暂无历史交易记录</td></tr>}
                         </tbody>
                     </table>
                 </Card>
@@ -1310,7 +1498,6 @@
             return (
                 <PageShell>
                     <PageHeader
-                        eyebrow="回测任务"
                         title="回测任务大厅"
                         subtitle="集中展示回测记录、同步状态和策略导入入口，适合截取为项目能力总览。"
                         actions={<button onClick={() => setIsCreating(true)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors"><Icons.Plus size={14} className="mr-1" /> 新建回测</button>}
@@ -1463,7 +1650,7 @@
                             <div className="flex items-center gap-2.5 shrink-0">
                                 <span className="h-8 w-8 rounded-md border border-green-800/50 bg-green-950/35 flex items-center justify-center" aria-hidden="true"><Icons.LeekMark size={22} /></span>
                                 <div className="hidden sm:flex flex-col justify-center leading-none">
-                                    <span className="text-[15px] leading-4 font-bold text-green-500 tracking-wide">韭菜量化</span>
+                                    <span className="text-[15px] leading-4 font-bold text-green-500 tracking-wide">韭菜策略</span>
                                     <span className="mt-0.5 text-[9px] leading-[10px] font-mono font-medium text-zinc-500 tracking-normal">LINPO LAB</span>
                                 </div>
                             </div>
@@ -1480,7 +1667,7 @@
 
                     <div className="flex-1 flex overflow-hidden relative w-full bg-[#0D0E11]">
                         {activeTab === '监控' && <ViewMonitor appliedStrategy={appliedStrategy} positions={positions} setPositions={setPositions} historyTrades={historyTrades} setHistoryTrades={setHistoryTrades} executedSignalIds={executedSignalIds} setExecutedSignalIds={setExecutedSignalIds} apiStatus={apiStatus} staticScan={staticScan} onShowToast={showToast} onOpenStockDetail={setSelectedStock} />}
-                        {activeTab === '历史' && <ViewHistory historyTrades={historyTrades} onOpenStockDetail={setSelectedStock} />}
+                        {activeTab === '历史' && <ViewHistory historyTrades={historyTrades} setHistoryTrades={setHistoryTrades} onShowToast={showToast} onOpenStockDetail={setSelectedStock} />}
                         {activeTab === '策略' && <ViewStrategy strategies={normalizedStrategies} setStrategies={setStrategies} appliedId={appliedStrategyId} setAppliedId={setAppliedStrategyId} onShowToast={showToast} />}
                         {activeTab === '回测' && <ViewBacktest strategies={normalizedStrategies} setStrategies={setStrategies} backtests={backtests} setBacktests={setBacktests} apiStatus={apiStatus} onShowToast={showToast} />}
                     </div>

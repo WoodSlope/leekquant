@@ -35,6 +35,27 @@ class VisualContractsTest(unittest.TestCase):
         self.assertIn('headerClass="px-6 py-3"', strategy_library)
         self.assertIn('bodyClass="p-3 space-y-3 overflow-y-auto"', strategy_library)
 
+    def test_main_page_headers_omit_eyebrow_labels(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        for title in ["策略监控台", "历史交易复盘", "策略规则配置", "回测任务大厅"]:
+            title_index = html.index(title)
+            header_start = html.rfind("<PageHeader", 0, title_index)
+            header_end = html.index("stats={", title_index)
+            page_header = html[header_start:header_end]
+            self.assertNotIn("eyebrow=", page_header)
+
+    def test_history_trade_records_can_be_cleared_with_confirmation(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        history_view = html[html.index("const ViewHistory") : html.index("// ==========================================\n        // 子视图：4. 回测页")]
+
+        self.assertIn("const handleClearHistory = () =>", history_view)
+        self.assertIn("确定清空全部历史交易记录吗？此操作只会清除本浏览器里的模拟交易历史，无法撤回。", history_view)
+        self.assertIn("setHistoryTrades([]);", history_view)
+        self.assertIn("历史交易记录已清空", history_view)
+        self.assertIn("清空记录", history_view)
+        self.assertIn("暂无历史交易记录", history_view)
+
     def test_project_ui_style_guide_captures_visual_contracts(self):
         guide = ROOT / "UI_STYLE_GUIDE.md"
 
