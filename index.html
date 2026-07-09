@@ -133,11 +133,14 @@
             </div>
         );
 
+        const NOTICE_SURFACE_CLASS = "bg-[#14130F]/95 border-yellow-900/35 text-yellow-100/80";
+        const NOTICE_FRAME_CLASS = "shrink-0 rounded-lg border px-3.5 py-2 text-xs md:text-sm leading-5 flex items-center gap-3";
+
         const NoticeStrip = ({ type = "neutral", children, onDismiss }) => {
-            const style = "bg-[#14130F]/95 border-yellow-900/35 text-yellow-100/80";
+            const style = NOTICE_SURFACE_CLASS;
             const label = type === 'warning' || type === 'danger' ? '风险提示' : '提示';
             return (
-                <div className={`shrink-0 rounded-lg border px-3.5 py-2 text-xs md:text-sm leading-5 flex items-center gap-3 ${style}`}>
+                <div className={`${NOTICE_FRAME_CLASS} ${style}`}>
                     <Icons.AlertTriangle size={14} className="shrink-0 text-yellow-500/80" />
                     <span className="sr-only">{label}</span>
                     <span className="min-w-0 flex-1">{children}</span>
@@ -714,16 +717,18 @@
             } : null;
             const activeData = staticData || (isLiveDate && remoteData ? { ...remoteData, strategyName: appliedStrategy?.name || '无运行策略' } : localData);
             const signals = activeData.signals;
+            const currentProvider = staticData?.provider || remoteData?.provider || apiStatus.provider || activeData?.provider || 'local';
+            const dataSourceLabel = dataSourceName(currentProvider);
             const dataNoticeType = activeData?.provider === 'mock' || apiStatus.provider === 'local' ? 'warning' : 'neutral';
             const dataNotice = staticData
                 ? (staticData.provider === 'mock'
                     ? `当前为收盘静态样本数据，最后生成时间 ${staticData.runAt || '--'}，适合验证 GitHub 半自动版流程。`
-                    : `当前为 ${staticData.tradeDate || '--'} 收盘后自动生成的观察清单，最后更新时间 ${staticData.runAt || '--'}。`)
+                    : `当前为 ${staticData.tradeDate || '--'} 收盘后自动生成的观察清单，数据源：${dataSourceLabel}，最后更新时间 ${staticData.runAt || '--'}。`)
                 : remoteData?.provider === 'mock'
                 ? '当前扫描已降级到样本数据，适合展示产品流程，不适合作为真实交易依据。'
                 : apiStatus.provider === 'local'
                 ? '本地接口未连接，页面正在使用前端样本数据展示。'
-                : '当前页面用于策略流程演示，请结合数据源状态理解扫描结果。';
+                : `当前页面用于策略流程演示，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。`;
             const dateOptions = [
                 ...(staticDate ? [{ value: staticDate, label: staticDate, title: "收盘扫描" }] : []),
                 { value: "2026-05-20", label: "2026-05-20", title: "本地演示" },
@@ -731,15 +736,12 @@
             ].filter((option, index, arr) => arr.findIndex(item => item.value === option.value) === index);
             const selectedDateOption = dateOptions.find(option => option.value === currentDate);
             const signalTitle = staticData ? '收盘观察信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
-            const currentProvider = staticData?.provider || remoteData?.provider || apiStatus.provider || activeData?.provider || 'local';
-            const providerBadgeLabel = dataSourceName(currentProvider);
-            const providerBadgeTone = currentProvider === 'mock' || currentProvider === 'local'
-                ? 'border-yellow-800/50 bg-yellow-950/30 text-yellow-300'
-                : currentProvider === 'sina'
-                ? 'border-blue-800/50 bg-blue-950/30 text-blue-300'
-                : 'border-green-800/50 bg-green-950/30 text-green-300';
-            const scanButtonText = isScanning ? '扫描中' : '执行扫描';
-            const scanButtonTitle = canRunScan ? '使用当前策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : hasStaticScan ? 'GitHub Pages 读取收盘快照，不能在页面内执行扫描' : '本地接口未连接时使用演示数据';
+            const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';
+            const scanButtonTitle = hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新' : canRunScan ? '使用当前策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
+            const scanButtonDisabled = hasStaticScan || isScanning;
+            const activeScanButtonClass = "bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors";
+            const readOnlyScanButtonClass = "bg-zinc-800/70 text-zinc-500 border border-zinc-700/60 cursor-not-allowed px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors";
+            const scanButtonClass = hasStaticScan ? readOnlyScanButtonClass : `${activeScanButtonClass} ${isScanning ? 'opacity-50 cursor-not-allowed hover:bg-blue-600' : ''}`;
 
             useEffect(() => {
                 if (staticDate) setCurrentDate(staticDate);
@@ -828,19 +830,12 @@
             return (
                 <PageShell>
                     <PageHeader
-                        eyebrow={hasStaticScan ? "GitHub 半自动版" : "本地策略原型"}
                         title={hasStaticScan ? "收盘策略复盘" : "策略监控台"}
                         subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "把大盘开关、买入信号和持仓风控放在同一张工作台里，适合演示策略运行流程。"}
                         actions={
-                            <>
-                                <div title={`当前数据源：${providerBadgeLabel}`} className={`h-8 px-2.5 rounded-md border flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${providerBadgeTone}`}>
-                                    <span className="text-[10px] opacity-70">数据源</span>
-                                    <span className="font-mono">{providerBadgeLabel}</span>
-                                </div>
-                                <button onClick={handleRunScan} disabled={isScanning} aria-disabled={!canRunScan || isScanning} title={scanButtonTitle} className={`bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors ${isScanning ? 'opacity-50 cursor-not-allowed hover:bg-blue-600' : ''}`}>
-                                    <Icons.Play size={14} className="mr-1" /> {scanButtonText}
-                                </button>
-                            </>
+                            <button onClick={handleRunScan} disabled={scanButtonDisabled} aria-disabled={!canRunScan || scanButtonDisabled} title={scanButtonTitle} className={scanButtonClass}>
+                                <Icons.Play size={14} className="mr-1" /> {scanButtonText}
+                            </button>
                         }
                         stats={
                             <>
@@ -858,13 +853,21 @@
                         <Card
                             title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>}
                             actions={
-                                <div title={selectedDateOption?.title || "选择观测日期"} className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
-                                    <Icons.Calendar size={13} className="text-zinc-400" />
-                                    <span className="text-xs text-zinc-400 shrink-0">日期</span>
-                                    <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer w-[104px] max-w-[38vw]">
-                                        {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                                    </select>
-                                </div>
+                                hasStaticScan ? (
+                                    <div title="GitHub Pages 只展示最近一次收盘快照" className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
+                                        <Icons.Calendar size={13} className="text-zinc-400" />
+                                        <span className="text-xs text-zinc-400 shrink-0">观察日期</span>
+                                        <span className="text-zinc-200 text-sm font-mono whitespace-nowrap">{staticDate || '--'}</span>
+                                    </div>
+                                ) : (
+                                    <div title={selectedDateOption?.title || "选择观测日期"} className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
+                                        <Icons.Calendar size={13} className="text-zinc-400" />
+                                        <span className="text-xs text-zinc-400 shrink-0">日期</span>
+                                        <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer w-[104px] max-w-[38vw]">
+                                            {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                        </select>
+                                    </div>
+                                )
                             }
                             className="w-full lg:w-[360px] shrink-0 min-h-[350px]"
                             headerClass="px-4 py-3"

@@ -16,6 +16,15 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("执行扫描", html)
         self.assertIn("bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors", html)
 
+    def test_monitor_header_omits_context_eyebrow(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        title_index = html.index("策略监控台")
+        header_start = html.rfind("<PageHeader", 0, title_index)
+        monitor_header = html[header_start : html.index("stats={", title_index)]
+        self.assertNotIn("eyebrow=", monitor_header)
+        self.assertNotIn("本地策略原型", monitor_header)
+
     def test_monitor_date_picker_is_in_funnel_card_actions(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
@@ -47,19 +56,36 @@ class MonitorPageTest(unittest.TestCase):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("const canRunScan = Boolean(appliedStrategy) && apiStatus.status === 'online';", html)
-        self.assertIn("disabled={isScanning}", html)
-        self.assertIn("aria-disabled={!canRunScan || isScanning}", html)
+        self.assertIn("disabled={scanButtonDisabled}", html)
+        self.assertIn("const scanButtonDisabled = hasStaticScan || isScanning;", html)
+        self.assertIn("aria-disabled={!canRunScan || scanButtonDisabled}", html)
         self.assertIn("!appliedStrategy ? '请先在策略页应用一个策略'", html)
         self.assertNotIn("button onClick={handleRunScan} disabled={!canRunScan || isScanning}", html)
 
-    def test_monitor_header_shows_data_source_status_badge(self):
+    def test_static_snapshot_mode_uses_read_only_controls(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';", html)
+        self.assertIn("const scanButtonDisabled = hasStaticScan || isScanning;", html)
+        self.assertIn("disabled={scanButtonDisabled}", html)
+        self.assertIn("hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新'", html)
+
+        funnel_card = html[html.index("策略漏斗总览") : html.index("第 0 步：市场环境")]
+        self.assertIn("hasStaticScan ? (", funnel_card)
+        self.assertIn(">观察日期</span>", funnel_card)
+        self.assertIn("{staticDate || '--'}", funnel_card)
+        self.assertIn(": (", funnel_card)
+        self.assertIn("<select value={currentDate}", funnel_card)
+
+    def test_monitor_header_does_not_duplicate_data_source_notice(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("const currentProvider =", html)
-        self.assertIn("const providerBadgeLabel = dataSourceName(currentProvider);", html)
-        self.assertIn(">数据源</span>", html)
-        self.assertIn("{providerBadgeLabel}", html)
-        self.assertIn("providerBadgeTone", html)
+        self.assertIn("const dataSourceLabel = dataSourceName(currentProvider);", html)
+        self.assertIn("数据源：${dataSourceLabel}", html)
+        monitor_actions = html[html.index("actions={") : html.index("stats={", html.index("actions={"))]
+        self.assertNotIn(">数据源</span>", monitor_actions)
+        self.assertNotIn("当前数据源", monitor_actions)
 
     def test_toast_timer_is_reset_between_messages(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
