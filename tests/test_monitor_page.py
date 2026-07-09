@@ -216,6 +216,14 @@ class MonitorPageTest(unittest.TestCase):
         self.assertNotIn(">数据源</span>", monitor_actions)
         self.assertNotIn("当前数据源", monitor_actions)
 
+    def test_top_bar_shows_copyright_and_research_disclaimer(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("© 2026 LINPO LAB · 仅供研究观察，不构成投资建议", html)
+        top_bar = html[html.index("h-14 border-b border-zinc-800/60") : html.index("<div className=\"flex-1 flex overflow-hidden", html.index("h-14 border-b border-zinc-800/60"))]
+        self.assertIn("justify-between", top_bar)
+        self.assertIn("hidden lg:block", top_bar)
+
     def test_toast_timer_is_reset_between_messages(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 

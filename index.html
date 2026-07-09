@@ -1649,8 +1649,8 @@
                         </div>
                     )}
 
-                    <div className="h-14 border-b border-zinc-800/60 flex items-center px-4 md:px-6 bg-[#111216] justify-between z-40 shrink-0">
-                        <div className="flex items-center w-full justify-between md:justify-start md:space-x-8">
+                    <div className="h-14 border-b border-zinc-800/60 flex items-center px-4 md:px-6 bg-[#111216] justify-between gap-4 z-40 shrink-0">
+                        <div className="flex items-center min-w-0 justify-between md:justify-start md:space-x-8">
                             <div className="flex items-center gap-2.5 shrink-0">
                                 <span className="h-8 w-8 rounded-md border border-green-800/50 bg-green-950/35 flex items-center justify-center" aria-hidden="true"><Icons.LeekMark size={22} /></span>
                                 <div className="hidden sm:flex flex-col justify-center leading-none">
@@ -1666,6 +1666,9 @@
                                 </button>
                                 ))}
                             </nav>
+                        </div>
+                        <div className="hidden lg:block shrink-0 text-[11px] font-mono text-zinc-600 whitespace-nowrap">
+                            © 2026 LINPO LAB · 仅供研究观察，不构成投资建议
                         </div>
                     </div>
 
