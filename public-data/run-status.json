@@ -1,13 +1,13 @@
 {
   "ok": true,
   "mode": "close-scan",
-  "runAt": "2026-07-09 12:57:50",
-  "tradeDate": "2026-07-08",
+  "runAt": "2026-07-09 19:27:58",
+  "tradeDate": "2026-07-09",
   "provider": "sina",
   "warnings": [
     "akshare 行情获取失败，已尝试备用免费源: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
   ],
   "latestFile": "public-data/latest-scan.json",
   "marketFile": "public-data/market-snapshot.json",
-  "historyFile": "public-data/history/2026-07-08.json"
+  "historyFile": "public-data/history/2026-07-09.json"
 }
