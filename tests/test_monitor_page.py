@@ -12,9 +12,22 @@ class MonitorPageTest(unittest.TestCase):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
         self.assertIn("const handleRunScan = (", html)
-        self.assertIn("onClick={handleRunScan}", html)
+        self.assertIn("onClick={() => handleRunScan()}", html)
         self.assertIn("执行扫描", html)
         self.assertIn("bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors", html)
+
+    def test_monitor_scan_feedback_names_strategy_and_result(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("按当前运行策略重新执行扫描", html)
+        self.assertIn("const scanSignalCount = (data.signals || []).length;", html)
+        self.assertIn("onShowToast(`已按【${appliedStrategy.name}】完成扫描：${scanSignalCount} 只候选 (${dataSourceName(data.provider)})`);", html)
+
+    def test_monitor_stat_labels_running_strategy(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('StatBlock label="运行策略"', html)
+        self.assertNotIn('StatBlock label="当前策略"', html)
 
     def test_monitor_header_omits_context_eyebrow(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")

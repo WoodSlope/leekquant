@@ -737,7 +737,7 @@
             const selectedDateOption = dateOptions.find(option => option.value === currentDate);
             const signalTitle = staticData ? '收盘观察信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
             const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';
-            const scanButtonTitle = hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新' : canRunScan ? '使用当前策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
+            const scanButtonTitle = hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新' : canRunScan ? '按当前运行策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
             const scanButtonDisabled = hasStaticScan || isScanning;
             const activeScanButtonClass = "bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors";
             const readOnlyScanButtonClass = "bg-zinc-800/70 text-zinc-500 border border-zinc-700/60 cursor-not-allowed px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors";
@@ -775,7 +775,8 @@
                         provider: data.provider,
                         warnings: data.warnings || []
                     });
-                    if (!options.silent) onShowToast(`监控扫描已完成 (${dataSourceName(data.provider)})`);
+                    const scanSignalCount = (data.signals || []).length;
+                    if (!options.silent) onShowToast(`已按【${appliedStrategy.name}】完成扫描：${scanSignalCount} 只候选 (${dataSourceName(data.provider)})`);
                 }).catch(() => {
                     if (!shouldApply()) return;
                     setRemoteData(null);
@@ -833,13 +834,13 @@
                         title={hasStaticScan ? "收盘策略复盘" : "策略监控台"}
                         subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "把大盘开关、买入信号和持仓风控放在同一张工作台里，适合演示策略运行流程。"}
                         actions={
-                            <button onClick={handleRunScan} disabled={scanButtonDisabled} aria-disabled={!canRunScan || scanButtonDisabled} title={scanButtonTitle} className={scanButtonClass}>
+                            <button onClick={() => handleRunScan()} disabled={scanButtonDisabled} aria-disabled={!canRunScan || scanButtonDisabled} title={scanButtonTitle} className={scanButtonClass}>
                                 <Icons.Play size={14} className="mr-1" /> {scanButtonText}
                             </button>
                         }
                         stats={
                             <>
-                                <StatBlock label="当前策略" value={cleanDisplayText(activeData.strategyName) || '未应用'} tone={activeData.strategyName !== "无运行策略" ? 'text-blue-400' : 'text-zinc-500'} />
+                                <StatBlock label="运行策略" value={cleanDisplayText(activeData.strategyName) || '未应用'} tone={activeData.strategyName !== "无运行策略" ? 'text-blue-400' : 'text-zinc-500'} />
                                 <StatBlock label={hasStaticScan ? "观察信号" : "买入信号"} value={`${signals.length} 只`} tone={signals.length ? 'text-green-400' : 'text-zinc-400'} helper={isLiveDate ? '今日候选' : '历史复盘'} />
                                 <StatBlock label="模拟持仓" value={`${positions.length} 笔`} tone={positions.length ? 'text-blue-300' : 'text-zinc-400'} helper="当前持仓" />
                                 <StatBlock label="市场开关" value={activeData.funnel.s0.text} tone={activeData.funnel.s0.status === 'pass' ? 'text-green-400' : 'text-red-400'} helper="大盘环境" />
@@ -959,8 +960,16 @@
         // 子视图：2. 策略页 (Strategy)
         // ==========================================
         const ViewStrategy = ({ strategies, setStrategies, appliedId, setAppliedId, onShowToast }) => {
-            const [activeCardId, setActiveCardId] = useState(strategies[0]?.id);
-            const activeStrategy = strategies.find(s => s.id === activeCardId) || strategies[0];
+            const [activeCardId, setActiveCardId] = useStickyState(appliedId || strategies[0]?.id || null, 'lq_activeStrategyCardId');
+            const hasActiveStrategy = strategies.some(s => s.id === activeCardId);
+            const activeStrategy = strategies.find(s => s.id === activeCardId) || strategies.find(s => s.id === appliedId) || strategies[0];
+            const strategyIdsKey = strategies.map(s => s.id).join(',');
+
+            useEffect(() => {
+                if (hasActiveStrategy) return;
+                const fallbackId = appliedId && strategies.some(s => s.id === appliedId) ? appliedId : strategies[0]?.id || null;
+                if (activeCardId !== fallbackId) setActiveCardId(fallbackId);
+            }, [hasActiveStrategy, activeCardId, appliedId, strategyIdsKey]);
 
             const handleCreateStrategy = () => {
                 const newStrategy = {
@@ -1000,6 +1009,7 @@
             };
 
             const handleApply = () => {
+                setActiveCardId(activeStrategy.id);
                 setAppliedId(activeStrategy.id);
                 setStrategies(strategies.map(s => ({ ...s, status: s.id === activeStrategy.id ? 'applied' : 'idle' })));
                 onShowToast(`已应用【${activeStrategy.name}】`);
