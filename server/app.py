@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server.engine.rules import backtest, scan  # noqa: E402
+from server.providers.chain import build_provider, build_providers, call_provider_method  # noqa: E402
 from server.providers.mock_provider import MockProvider  # noqa: E402
 from server.storage import CacheStore  # noqa: E402
 
@@ -19,14 +20,7 @@ STORE = CacheStore()
 
 
 def get_provider():
-    warnings: list[str] = []
-    try:
-        from server.providers.akshare_provider import AkshareProvider
-
-        return AkshareProvider(), warnings
-    except Exception as exc:
-        warnings.append(str(exc))
-        return MockProvider(), warnings
+    return build_provider("auto")
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -63,12 +57,21 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
     def handle_market_snapshot(self):
-        provider, warnings = get_provider()
-        cached = STORE.get_market_snapshot(ttl_minutes=5)
+        providers, warnings = build_providers("auto")
+        cached = STORE.get_market_snapshot_record(ttl_minutes=5)
         if cached:
-            return self.json({"ok": True, "provider": "cache", "warnings": warnings, "market": cached, "cache": STORE.cache_info()})
+            return self.json(
+                {
+                    "ok": True,
+                    "provider": cached["provider"],
+                    "warnings": warnings,
+                    "market": cached["market"],
+                    "cacheHit": True,
+                    "cache": STORE.cache_info(),
+                }
+            )
         try:
-            market = provider.today_market()
+            provider, market = call_provider_method(providers, warnings, "today_market", action_label="行情获取")
             STORE.save_market_snapshot(market, provider.name)
             return self.json({"ok": True, "provider": provider.name, "warnings": warnings, "market": market, "cache": STORE.cache_info()})
         except Exception as exc:
@@ -80,32 +83,46 @@ class Handler(SimpleHTTPRequestHandler):
 
     def handle_scan(self):
         payload = self.read_json()
-        provider, warnings = get_provider()
+        providers, warnings = build_providers("auto")
+        provider_name = providers[0].name
         try:
-            market = STORE.get_market_snapshot(ttl_minutes=5) or provider.today_market()
-            STORE.save_market_snapshot(market, provider.name)
+            cached = STORE.get_market_snapshot_record(ttl_minutes=5)
+            if cached:
+                market = cached["market"]
+                provider_name = cached["provider"]
+            else:
+                provider, market = call_provider_method(providers, warnings, "today_market", action_label="行情获取")
+                provider_name = provider.name
+                STORE.save_market_snapshot(market, provider_name)
         except Exception as exc:
             fallback = MockProvider()
             warnings.append(str(exc))
-            provider = fallback
+            provider_name = fallback.name
             market = fallback.today_market()
-            STORE.save_market_snapshot(market, fallback.name)
+            STORE.save_market_snapshot(market, provider_name)
         result = scan(
             payload.get("config") or {},
             market,
             executed_ids=payload.get("executedSignalIds") or [],
             position_ids=payload.get("positionIds") or [],
         )
-        return self.json({"ok": True, "provider": provider.name, "warnings": warnings, **result})
+        return self.json({"ok": True, "provider": provider_name, "warnings": warnings, **result})
 
     def handle_backtest(self):
         payload = self.read_json()
         query = parse_qs(urlparse(self.path).query)
-        provider, warnings = get_provider()
+        providers, warnings = build_providers("auto")
         start = payload.get("start") or query.get("start", [None])[0]
         end = payload.get("end") or query.get("end", [None])[0]
         try:
-            markets = provider.historical_markets(start=start, end=end)
+            provider, markets = call_provider_method(
+                providers,
+                warnings,
+                "historical_markets",
+                start=start,
+                end=end,
+                action_label="历史行情获取",
+            )
         except Exception as exc:
             fallback = MockProvider()
             warnings.append(str(exc))
@@ -120,7 +137,8 @@ class Handler(SimpleHTTPRequestHandler):
         query = parse_qs(parsed.query)
         start = query.get("start", ["20200101"])[0]
         end = query.get("end", ["20991231"])[0]
-        provider, warnings = get_provider()
+        providers, warnings = build_providers("auto")
+        provider = providers[0]
 
         cached_rows = STORE.get_daily_range(code, self.date_key(start), self.date_key(end))
         _, max_date = STORE.get_daily_bounds(code)
@@ -132,7 +150,15 @@ class Handler(SimpleHTTPRequestHandler):
 
         fetched_rows = []
         try:
-            fetched_rows = provider.stock_daily(code, fetch_start, end)
+            provider, fetched_rows = call_provider_method(
+                providers,
+                warnings,
+                "stock_daily",
+                code,
+                fetch_start,
+                end,
+                action_label="个股日线获取",
+            )
             STORE.save_daily(code, fetched_rows, provider.name)
         except Exception as exc:
             warnings.append(str(exc))

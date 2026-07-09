@@ -56,7 +56,7 @@ class CacheStore:
                 """
             )
 
-    def get_market_snapshot(self, trade_date: str | None = None, ttl_minutes: int = 5) -> dict | None:
+    def get_market_snapshot_record(self, trade_date: str | None = None, ttl_minutes: int = 5) -> dict | None:
         with self.connect() as conn:
             if trade_date:
                 row = conn.execute("SELECT * FROM market_snapshot WHERE trade_date = ?", (trade_date,)).fetchone()
@@ -66,7 +66,16 @@ class CacheStore:
             return None
         if not trade_date and self.is_expired(row["fetched_at"], ttl_minutes):
             return None
-        return json.loads(row["payload"])
+        return {
+            "tradeDate": row["trade_date"],
+            "provider": row["provider"],
+            "market": json.loads(row["payload"]),
+            "fetchedAt": row["fetched_at"],
+        }
+
+    def get_market_snapshot(self, trade_date: str | None = None, ttl_minutes: int = 5) -> dict | None:
+        record = self.get_market_snapshot_record(trade_date=trade_date, ttl_minutes=ttl_minutes)
+        return record["market"] if record else None
 
     def save_market_snapshot(self, market: dict, provider: str):
         trade_date = market.get("date") or datetime.now().strftime("%Y-%m-%d")

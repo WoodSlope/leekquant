@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from server.engine.rules import scan  # noqa: E402
-from server.providers.mock_provider import MockProvider  # noqa: E402
+from server.providers.chain import build_provider, build_providers, call_provider_method  # noqa: E402
 
 
 DEFAULT_CONFIG_PATH = ROOT / "config" / "default-strategy.json"
@@ -26,32 +26,8 @@ def load_strategy(path: Path = DEFAULT_CONFIG_PATH) -> tuple[str, str, dict]:
     return raw.get("name") or "默认收盘策略", raw.get("description") or "", raw
 
 
-def build_provider(provider_name: str = "auto"):
-    warnings: list[str] = []
-    if provider_name == "mock":
-        return MockProvider(), warnings
-    if provider_name not in {"auto", "akshare"}:
-        warnings.append(f"未知数据源 {provider_name}，已降级到样本数据")
-        return MockProvider(), warnings
-    try:
-        from server.providers.akshare_provider import AkshareProvider
-
-        return AkshareProvider(), warnings
-    except Exception as exc:
-        if provider_name == "akshare":
-            warnings.append(f"AKShare 初始化失败，已降级到样本数据: {exc}")
-        else:
-            warnings.append(f"免费行情源不可用，已降级到样本数据: {exc}")
-        return MockProvider(), warnings
-
-
-def get_market(provider, warnings: list[str]) -> tuple[object, dict]:
-    try:
-        return provider, provider.today_market()
-    except Exception as exc:
-        warnings.append(f"{provider.name} 行情获取失败，已降级到样本数据: {exc}")
-        fallback = MockProvider()
-        return fallback, fallback.today_market()
+def get_market(providers, warnings: list[str]) -> tuple[object, dict]:
+    return call_provider_method(providers, warnings, "today_market", action_label="行情获取")
 
 
 def market_summary(market: dict) -> dict:
@@ -85,8 +61,8 @@ def generate_public_data(
     run_at = run_at_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     strategy_name, strategy_description, config = load_strategy(config_path)
-    provider, warnings = build_provider(provider_name)
-    provider, market = get_market(provider, warnings)
+    providers, warnings = build_providers(provider_name)
+    provider, market = get_market(providers, warnings)
     result = scan(config, market, executed_ids=[], position_ids=[])
     trade_date = str(result.get("providerDate") or market.get("date") or run_at_dt.strftime("%Y-%m-%d"))
 
@@ -137,7 +113,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="生成 GitHub Pages 可读取的收盘扫描静态数据")
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR), help="静态 JSON 输出目录")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="策略配置 JSON")
-    parser.add_argument("--provider", default="auto", choices=["auto", "akshare", "mock"], help="数据源")
+    parser.add_argument("--provider", default="auto", choices=["auto", "akshare", "sina", "mock"], help="数据源")
     return parser.parse_args()
 
 

@@ -33,7 +33,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         // --- 持久化状态 Hook ---
         function useStickyState(defaultValue, key) {
@@ -81,12 +81,12 @@
         // ==========================================
         // UI规范组件：通用卡片 (Dashboard Card)
         // ==========================================
-        const Card = ({ title, actions, children, className = "", bodyClass = "p-4 md:p-6" }) => (
+        const Card = ({ title, actions, children, className = "", bodyClass = "p-4 md:p-6", headerClass = "px-4 md:px-6 py-3" }) => (
             <div className={`bg-[#16181D]/95 border border-zinc-800/70 rounded-lg overflow-hidden flex flex-col shadow-[0_18px_60px_rgba(0,0,0,0.20)] ${className}`}>
                 {(title || actions) && (
-                    <div className="min-h-14 px-4 md:px-6 py-3 border-b border-zinc-800/60 flex items-center justify-between bg-[#111216]/95 shrink-0 gap-3">
-                        <div className="text-sm font-bold text-zinc-200 flex items-center">{title}</div>
-                        {actions && <div className="flex items-center gap-3 flex-wrap justify-end">{actions}</div>}
+                    <div className={`min-h-14 ${headerClass} border-b border-zinc-800/60 flex items-center justify-between bg-[#111216]/95 shrink-0 gap-3 w-full min-w-0`}>
+                        <div className="text-sm font-bold text-zinc-200 flex items-center min-w-0">{title}</div>
+                        {actions && <div className="flex items-center gap-3 flex-wrap justify-end shrink-0">{actions}</div>}
                     </div>
                 )}
                 <div className={`flex-1 ${bodyClass}`}>
@@ -214,7 +214,7 @@
             .replace(/MACD/g, '趋势指标')
             .replace(/RSI/g, '超卖指标')
             .trim();
-        const dataSourceName = (provider) => provider === 'akshare' ? '收盘行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+        const dataSourceName = (provider) => provider === 'akshare' ? '收盘行情' : provider === 'sina' ? '备用收盘行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
 
         const countSelectedRules = (config) => (config.s1Keys.length + config.s2Keys.length + config.s3Keys.length);
         const strategyRuleSummary = (config) => `${config.s1Tpl} / ${config.s2Tpl} / ${config.s3Tpl}，共 ${countSelectedRules(config)} 条规则`;
@@ -695,10 +695,12 @@
             const [expandedSteps, setExpandedSteps] = useState({ s0: false, s1: true, s2: false });
             const [remoteData, setRemoteData] = useState(null);
             const [showNotice, setShowNotice] = useState(true);
+            const [isScanning, setIsScanning] = useState(false);
             const hasStaticScan = apiStatus.status === 'static' && staticScan?.ok;
             const staticDate = staticScan?.tradeDate;
             const isStaticDate = hasStaticScan && currentDate === staticDate;
             const isLiveDate = !hasStaticScan && currentDate === "2026-05-20";
+            const canRunScan = Boolean(appliedStrategy) && apiStatus.status === 'online';
             const localData = buildMonitorData(currentDate, appliedStrategy, positions, executedSignalIds);
             const staticData = isStaticDate ? {
                 strategyName: staticScan.strategyName || '收盘扫描策略',
@@ -723,28 +725,47 @@
                 ? '本地接口未连接，页面正在使用前端样本数据展示。'
                 : '当前页面用于策略流程演示，请结合数据源状态理解扫描结果。';
             const dateOptions = [
-                ...(staticDate ? [{ value: staticDate, label: `${staticDate} 收盘扫描` }] : []),
-                { value: "2026-05-20", label: "2026-05-20 本地演示" },
-                { value: "2026-05-19", label: "2026-05-19 历史复盘" }
+                ...(staticDate ? [{ value: staticDate, label: staticDate, title: "收盘扫描" }] : []),
+                { value: "2026-05-20", label: "2026-05-20", title: "本地演示" },
+                { value: "2026-05-19", label: "2026-05-19", title: "历史复盘" }
             ].filter((option, index, arr) => arr.findIndex(item => item.value === option.value) === index);
+            const selectedDateOption = dateOptions.find(option => option.value === currentDate);
             const signalTitle = staticData ? '收盘观察信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
+            const currentProvider = staticData?.provider || remoteData?.provider || apiStatus.provider || activeData?.provider || 'local';
+            const providerBadgeLabel = dataSourceName(currentProvider);
+            const providerBadgeTone = currentProvider === 'mock' || currentProvider === 'local'
+                ? 'border-yellow-800/50 bg-yellow-950/30 text-yellow-300'
+                : currentProvider === 'sina'
+                ? 'border-blue-800/50 bg-blue-950/30 text-blue-300'
+                : 'border-green-800/50 bg-green-950/30 text-green-300';
+            const scanButtonText = isScanning ? '扫描中' : '执行扫描';
+            const scanButtonTitle = canRunScan ? '使用当前策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : hasStaticScan ? 'GitHub Pages 读取收盘快照，不能在页面内执行扫描' : '本地接口未连接时使用演示数据';
 
             useEffect(() => {
                 if (staticDate) setCurrentDate(staticDate);
             }, [staticDate]);
 
-            useEffect(() => {
-                let cancelled = false;
-                if (!isLiveDate || !appliedStrategy || apiStatus.status !== 'online') {
-                    setRemoteData(null);
-                    return;
+            const handleRunScan = (options = {}) => {
+                const shouldApply = options.shouldApply || (() => true);
+                if (!canRunScan) {
+                    if (!options.silent) {
+                        const message = !appliedStrategy
+                            ? '请先在策略页应用一个策略'
+                            : hasStaticScan
+                            ? '线上收盘快照不能在页面内执行扫描，请等待 Close Scan 更新'
+                            : '本地接口未连接，当前使用演示数据';
+                        onShowToast(message);
+                    }
+                    return Promise.resolve(false);
                 }
-                apiPost('/api/a/scan', {
+                setIsScanning(true);
+                return apiPost('/api/a/scan', {
                     config: appliedStrategy.config,
                     executedSignalIds,
                     positionIds: positions.map(p => p.id)
                 }).then(data => {
-                    if (cancelled) return;
+                    if (!shouldApply()) return;
+                    setCurrentDate("2026-05-20");
                     setRemoteData({
                         funnel: data.funnel,
                         details: data.details,
@@ -752,11 +773,26 @@
                         provider: data.provider,
                         warnings: data.warnings || []
                     });
+                    if (!options.silent) onShowToast(`监控扫描已完成 (${dataSourceName(data.provider)})`);
                 }).catch(() => {
-                    if (!cancelled) setRemoteData(null);
+                    if (!shouldApply()) return;
+                    setRemoteData(null);
+                    if (!options.silent) onShowToast('扫描失败，已回退到本地演示数据');
+                }).finally(() => {
+                    if (shouldApply()) setIsScanning(false);
                 });
+            };
+
+            useEffect(() => {
+                let cancelled = false;
+                if (!isLiveDate || !canRunScan) {
+                    setRemoteData(null);
+                    setIsScanning(false);
+                    return;
+                }
+                handleRunScan({ silent: true, shouldApply: () => !cancelled });
                 return () => { cancelled = true; };
-            }, [isLiveDate, appliedStrategy?.id, JSON.stringify(appliedStrategy?.config || {}), positions.length, executedSignalIds.join(','), apiStatus.status]);
+            }, [isLiveDate, canRunScan, appliedStrategy?.id, JSON.stringify(appliedStrategy?.config || {}), positions.length, executedSignalIds.join(','), apiStatus.status]);
 
             const toggleStep = (step) => setExpandedSteps(p => ({ ...p, [step]: !p[step] }));
 
@@ -797,13 +833,13 @@
                         subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "把大盘开关、买入信号和持仓风控放在同一张工作台里，适合演示策略运行流程。"}
                         actions={
                             <>
-                                <div className="flex items-center space-x-2 bg-zinc-900/80 px-3 py-1.5 rounded-md border border-zinc-800 w-fit">
-                                    <Icons.Calendar size={14} className="text-zinc-400" />
-                                    <span className="text-xs text-zinc-400 shrink-0">观测日期</span>
-                                    <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer">
-                                        {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                                    </select>
+                                <div title={`当前数据源：${providerBadgeLabel}`} className={`h-8 px-2.5 rounded-md border flex items-center gap-1.5 text-xs font-medium whitespace-nowrap ${providerBadgeTone}`}>
+                                    <span className="text-[10px] opacity-70">数据源</span>
+                                    <span className="font-mono">{providerBadgeLabel}</span>
                                 </div>
+                                <button onClick={handleRunScan} disabled={isScanning} aria-disabled={!canRunScan || isScanning} title={scanButtonTitle} className={`bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors ${isScanning ? 'opacity-50 cursor-not-allowed hover:bg-blue-600' : ''}`}>
+                                    <Icons.Play size={14} className="mr-1" /> {scanButtonText}
+                                </button>
                             </>
                         }
                         stats={
@@ -819,7 +855,21 @@
                     {showNotice && <NoticeStrip type={dataNoticeType} onDismiss={() => setShowNotice(false)}>{dataNotice}</NoticeStrip>}
 
                     <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 overflow-visible min-h-min">
-                        <Card title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>} className="w-full lg:w-[360px] shrink-0 min-h-[350px]" bodyClass="p-4 space-y-4">
+                        <Card
+                            title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>}
+                            actions={
+                                <div title={selectedDateOption?.title || "选择观测日期"} className="flex items-center space-x-1.5 bg-zinc-900/80 px-2.5 py-1.5 rounded-md border border-zinc-800 w-fit max-w-full">
+                                    <Icons.Calendar size={13} className="text-zinc-400" />
+                                    <span className="text-xs text-zinc-400 shrink-0">日期</span>
+                                    <select value={currentDate} onChange={(e) => setCurrentDate(e.target.value)} className="bg-transparent text-zinc-200 text-sm font-mono outline-none cursor-pointer w-[104px] max-w-[38vw]">
+                                        {dateOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                                    </select>
+                                </div>
+                            }
+                            className="w-full lg:w-[360px] shrink-0 min-h-[350px]"
+                            headerClass="px-4 py-3"
+                            bodyClass="p-4 space-y-4"
+                        >
                             <div className="flex items-center text-xs font-mono space-x-1.5 text-zinc-400 flex-wrap gap-y-2 mb-2">
                                 <span>S0</span><Badge type={activeData.funnel.s0.status}>{activeData.funnel.s0.text}</Badge><Icons.ChevronRight size={12} className="text-zinc-600"/>
                                 <span>S1</span><Badge type={activeData.funnel.s1.status}>{activeData.funnel.s1.text}</Badge><Icons.ChevronRight size={12} className="text-zinc-600"/>
@@ -849,7 +899,7 @@
                         </Card>
 
                         <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0 pb-2">
-                            <Card title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" bodyClass="p-0 overflow-x-auto">
+                            <Card title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto">
                                 <table className="w-full text-sm text-left min-w-[500px]">
                                     <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
                                         <tr><th className="py-3 px-4 font-normal">代码</th><th className="py-3 px-4 font-normal">名称</th><th className="py-3 px-4 font-normal">命中原因</th><th className="py-3 px-4 font-normal text-right">操作</th></tr>
@@ -867,7 +917,7 @@
                                 </table>
                             </Card>
 
-                            <Card title={<><Icons.Briefcase className="mr-2 text-blue-500" size={16}/>当前持仓风控<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{positions.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" bodyClass="p-0 overflow-x-auto">
+                            <Card title={<><Icons.Briefcase className="mr-2 text-blue-500" size={16}/>当前持仓风控<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{positions.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto">
                                 <table className="w-full text-sm text-left min-w-[600px]">
                                     <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
                                         <tr><th className="py-3 px-4 font-normal">代码</th><th className="py-3 px-4 font-normal font-sans">名称</th><th className="py-3 px-4 font-normal">浮动盈亏</th><th className="py-3 px-4 font-normal font-sans">离场信号/锁定</th><th className="py-3 px-4 font-normal text-right font-sans">操作</th></tr>
@@ -978,6 +1028,7 @@
                         title={<><Icons.FileText className="mr-2 text-zinc-400" size={16}/>策略库</>}
                         actions={<button onClick={handleCreateStrategy} className="text-zinc-400 hover:text-zinc-200 transition-colors bg-zinc-800/50 hover:bg-zinc-800 p-1 rounded-md"><Icons.Plus size={16} /></button>}
                         className="w-full md:w-80 shrink-0 h-[350px] md:h-fit"
+                        headerClass="px-6 py-3"
                         bodyClass="p-3 space-y-3 overflow-y-auto"
                     >
                         {strategies.length === 0 && <div className="text-zinc-600 text-center text-sm py-4">策略库为空，请新建</div>}
@@ -1004,6 +1055,7 @@
 
                     <Card
                         className="flex-1 min-w-0"
+                        headerClass="px-4 md:px-8 py-3"
                         bodyClass="p-4 md:p-8"
                         title={
                             activeStrategy ? (
@@ -1068,7 +1120,7 @@
                 />
                 {showNotice && <NoticeStrip type="neutral" onDismiss={() => setShowNotice(false)}>历史记录来自本地模拟交易，用于复盘规则执行过程；截图发布时建议保留“原型演示”语境。</NoticeStrip>}
 
-                <Card title="历史交易明细库" className="flex-1" bodyClass="p-0 overflow-x-auto">
+                <Card title="历史交易明细库" className="flex-1" headerClass="px-6 py-3" bodyClass="p-0 overflow-x-auto">
                     <table className="w-full text-sm text-left min-w-[700px]">
                         <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
                             <tr><th className="py-3 px-6 font-normal">代码名称</th><th className="py-3 px-6 font-normal">入场 / 离场日期</th><th className="py-3 px-6 font-normal">最终收益</th><th className="py-3 px-6 font-normal">离场原因</th><th className="py-3 px-6 font-normal text-right">纪律状态</th></tr>
@@ -1261,7 +1313,7 @@
                     {showNotice && <NoticeStrip type="warning" onDismiss={() => setShowNotice(false)}>当前回测用于原型演示，尚未覆盖滑点、手续费、停牌、涨跌停和严格逐日持仓逻辑。</NoticeStrip>}
                     <Card
                         title={<><Icons.Activity className="mr-2 text-blue-500" size={16}/>回测记录</>}
-                        className="flex-1" bodyClass="p-0 overflow-x-auto"
+                        className="flex-1" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto"
                     >
                         <table className="w-full text-sm text-left min-w-[700px]">
                         <thead className="text-xs text-zinc-500 border-b border-zinc-800/60 sticky top-0 bg-[#16181D] z-10">
@@ -1332,6 +1384,7 @@
             const [executedSignalIds, setExecutedSignalIds] = useStickyState([], 'lq_executedSignals');
 
             const [toast, setToast] = useState('');
+            const toastTimerRef = useRef(null);
             const [selectedStock, setSelectedStock] = useState(null); // { code, name, strategyName, reason... }
             const [apiStatus, setApiStatus] = useState({ status: 'offline', label: '本地引擎', provider: 'local' });
             const [staticScan, setStaticScan] = useState(null);
@@ -1375,8 +1428,9 @@
             }, []);
 
             const showToast = (msg) => {
+                if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
                 setToast(msg);
-                setTimeout(() => setToast(''), 3000);
+                toastTimerRef.current = setTimeout(() => setToast(''), 3000);
             };
 
             return (
