@@ -9,23 +9,32 @@ from server.providers.chain import build_providers, call_provider_method, provid
 
 
 class ProviderChainTest(unittest.TestCase):
-    def test_auto_provider_chain_keeps_sina_before_mock_when_akshare_fails_to_initialize(self):
+    def test_auto_provider_chain_uses_baostock_before_sina_for_daily_history(self):
         class FailingAkshareProvider:
             def __init__(self):
                 raise RuntimeError("ak init down")
 
+        class BaostockProvider:
+            name = "baostock"
+
         class SinaProvider:
             name = "sina"
 
+        fake_baostock_module = types.ModuleType("server.providers.baostock_provider")
+        fake_baostock_module.BaostockProvider = BaostockProvider
         fake_sina_module = types.ModuleType("server.providers.sina_provider")
         fake_sina_module.SinaProvider = SinaProvider
 
         with patch("server.providers.akshare_provider.AkshareProvider", FailingAkshareProvider), patch.dict(
-            sys.modules, {"server.providers.sina_provider": fake_sina_module}
+            sys.modules,
+            {
+                "server.providers.baostock_provider": fake_baostock_module,
+                "server.providers.sina_provider": fake_sina_module,
+            },
         ):
             providers, warnings = build_providers("auto")
 
-        self.assertEqual([provider.name for provider in providers], ["sina", "mock"])
+        self.assertEqual([provider.name for provider in providers], ["baostock", "sina", "mock"])
         self.assertTrue(any("AKShare 初始化失败" in item for item in warnings))
 
     def test_call_provider_method_uses_next_real_provider_before_mock(self):
@@ -106,7 +115,7 @@ class ProviderChainTest(unittest.TestCase):
         ):
             providers, warnings = build_providers("auto")
 
-        self.assertEqual([provider.name for provider in providers], ["akshare", "sina", "baostock", "mock"])
+        self.assertEqual([provider.name for provider in providers], ["akshare", "baostock", "sina", "mock"])
         self.assertEqual(warnings, [])
 
     def test_tushare_can_be_enabled_by_provider_order_and_token(self):

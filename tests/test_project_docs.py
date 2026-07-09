@@ -36,7 +36,8 @@ class ProjectDocsTest(unittest.TestCase):
         env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
-        self.assertIn("AKShare -> 新浪备用免费源 -> BaoStock -> mock", readme)
+        self.assertIn("核心目标是 A 股收盘后策略复盘与次日观察", readme)
+        self.assertIn("AKShare -> BaoStock -> 新浪行情兜底 -> mock", readme)
         self.assertIn("LEEK_PROVIDER_ORDER", readme)
         self.assertIn("TUSHARE_TOKEN", readme)
         self.assertIn(".env.example", readme)

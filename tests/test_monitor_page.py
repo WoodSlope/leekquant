@@ -55,6 +55,13 @@ class MonitorPageTest(unittest.TestCase):
         self.assertNotIn("TUSHARE_TOKEN", html)
         self.assertNotIn("type=\"password\"", html)
 
+    def test_monitor_provider_labels_match_history_daily_data_goal(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("AKShare 历史日线", html)
+        self.assertIn("BaoStock 历史日线备用", html)
+        self.assertIn("新浪行情兜底", html)
+
     def test_monitor_scan_status_is_in_funnel_card_actions(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 

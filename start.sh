@@ -13,8 +13,7 @@ source .venv/bin/activate
 
 REQ_STAMP=".venv/.requirements.stamp"
 if [ ! -f "$REQ_STAMP" ] || [ "requirements.txt" -nt "$REQ_STAMP" ]; then
-  python -m pip install --upgrade pip
-  python -m pip install -r requirements.txt
+  python -m pip install --disable-pip-version-check -r requirements.txt
   date > "$REQ_STAMP"
 fi
 

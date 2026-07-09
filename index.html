@@ -272,7 +272,7 @@
             .replace(/MACD/g, '趋势指标')
             .replace(/RSI/g, '超卖指标')
             .trim();
-        const dataSourceName = (provider) => provider === 'tushare' ? 'Tushare 增强行情' : provider === 'akshare' ? '收盘行情' : provider === 'sina' ? '备用收盘行情' : provider === 'baostock' ? 'BaoStock 备用行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+        const dataSourceName = (provider) => provider === 'tushare' ? 'Tushare 历史日线' : provider === 'akshare' ? 'AKShare 历史日线' : provider === 'baostock' ? 'BaoStock 历史日线备用' : provider === 'sina' ? '新浪行情兜底' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
         const STOCK_BOARD_OPTIONS = [
             { value: 'all', label: '全部' },
             { value: 'main', label: '主板' },

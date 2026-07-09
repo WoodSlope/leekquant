@@ -47,7 +47,7 @@ class GeneratePublicDataTest(unittest.TestCase):
             self.assertEqual(status["latestFile"], "public-data/latest-scan.json")
             self.assertEqual(status["historyFile"], f"public-data/history/{result['tradeDate']}.json")
 
-    def test_auto_uses_free_fallback_when_akshare_market_fetch_fails(self):
+    def test_auto_uses_baostock_daily_history_fallback_when_akshare_market_fetch_fails(self):
         class FailingAkshareProvider:
             name = "akshare"
 
@@ -55,7 +55,7 @@ class GeneratePublicDataTest(unittest.TestCase):
                 raise RuntimeError("ak down")
 
         class FallbackProvider:
-            name = "sina"
+            name = "baostock"
 
             def today_market(self):
                 return {
@@ -70,21 +70,21 @@ class GeneratePublicDataTest(unittest.TestCase):
                     "stocks": [],
                 }
 
-        fake_sina_module = types.ModuleType("server.providers.sina_provider")
-        fake_sina_module.SinaProvider = FallbackProvider
+        fake_baostock_module = types.ModuleType("server.providers.baostock_provider")
+        fake_baostock_module.BaostockProvider = FallbackProvider
 
         with tempfile.TemporaryDirectory() as tmp:
             output_dir = Path(tmp)
             with patch("server.providers.akshare_provider.AkshareProvider", FailingAkshareProvider), patch.dict(
-                sys.modules, {"server.providers.sina_provider": fake_sina_module}
+                sys.modules, {"server.providers.baostock_provider": fake_baostock_module}
             ):
                 result = generate_public_data(output_dir=output_dir, provider_name="auto")
 
             latest = json.loads((output_dir / "latest-scan.json").read_text(encoding="utf-8"))
 
-            self.assertEqual(result["provider"], "sina")
+            self.assertEqual(result["provider"], "baostock")
             self.assertEqual(result["tradeDate"], "2026-07-08")
-            self.assertEqual(latest["provider"], "sina")
+            self.assertEqual(latest["provider"], "baostock")
             self.assertTrue(any("akshare 行情获取失败" in item for item in latest["warnings"]))
             self.assertFalse(any("样本数据" in item for item in latest["warnings"]))
 
