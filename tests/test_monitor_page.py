@@ -43,6 +43,18 @@ class MonitorPageTest(unittest.TestCase):
 
         self.assertIn("基于历史日线和收盘数据执行扫描；每个交易日收盘后生成明日观察清单，不作为盘中实时买卖提醒。", html)
 
+    def test_monitor_notice_shows_provider_order_and_token_status_without_token_input(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("providerOrder: data.providerOrder || []", html)
+        self.assertIn("configured: data.configured || {}", html)
+        self.assertIn("const providerOrderNotice =", html)
+        self.assertIn("const tushareNotice =", html)
+        self.assertIn("Tushare 已使用本地 token 配置", html)
+        self.assertIn("Tushare 未配置本地 token", html)
+        self.assertNotIn("TUSHARE_TOKEN", html)
+        self.assertNotIn("type=\"password\"", html)
+
     def test_monitor_scan_status_is_in_funnel_card_actions(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 

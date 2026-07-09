@@ -272,7 +272,7 @@
             .replace(/MACD/g, '趋势指标')
             .replace(/RSI/g, '超卖指标')
             .trim();
-        const dataSourceName = (provider) => provider === 'akshare' ? '收盘行情' : provider === 'sina' ? '备用收盘行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+        const dataSourceName = (provider) => provider === 'tushare' ? 'Tushare 增强行情' : provider === 'akshare' ? '收盘行情' : provider === 'sina' ? '备用收盘行情' : provider === 'baostock' ? 'BaoStock 备用行情' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
         const STOCK_BOARD_OPTIONS = [
             { value: 'all', label: '全部' },
             { value: 'main', label: '主板' },
@@ -809,6 +809,8 @@
             const currentProvider = staticData?.provider || remoteData?.provider || apiStatus.provider || activeData?.provider || 'local';
             const dataSourceLabel = dataSourceName(currentProvider);
             const dataNoticeType = activeData?.provider === 'mock' || apiStatus.provider === 'local' ? 'warning' : 'neutral';
+            const providerOrderNotice = apiStatus.providerOrder?.length ? `数据源顺序：${apiStatus.providerOrder.map(dataSourceName).join(' -> ')}。` : '';
+            const tushareNotice = apiStatus.configured?.tushare ? 'Tushare 已使用本地 token 配置。' : apiStatus.providerOrder?.includes('tushare') ? 'Tushare 未配置本地 token，已按顺序降级。' : '';
             const dataNotice = staticData
                 ? (staticData.provider === 'mock'
                     ? `当前为收盘静态样本数据，最后生成时间 ${staticData.runAt || '--'}，适合验证 GitHub 半自动版流程。`
@@ -816,12 +818,12 @@
                 : remoteData?.provider === 'mock'
                 ? '当前扫描已降级到样本数据，适合展示产品流程，不适合作为真实交易依据。'
                 : awaitingLocalScan
-                ? '本地接口已连接，点击执行扫描后会按运行策略筛选股票。'
+                ? `本地接口已连接，点击执行扫描后会按运行策略筛选股票。${providerOrderNotice}${tushareNotice}`
                 : remoteData
-                ? `当前为 ${latestScanDate} 本地扫描结果，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。`
+                ? `当前为 ${latestScanDate} 本地扫描结果，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。${providerOrderNotice}${tushareNotice}`
                 : apiStatus.provider === 'local'
                 ? '本地接口未连接，页面正在使用前端样本数据展示。'
-                : `当前页面用于策略流程演示，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。`;
+                : `当前页面用于策略流程演示，数据源：${dataSourceLabel}，请结合数据源状态理解扫描结果。${providerOrderNotice}${tushareNotice}`;
             const scanDateLabel = remoteData ? '扫描日期' : awaitingLocalScan ? '扫描状态' : '演示日期';
             const scanDateValue = remoteData ? latestScanDate : awaitingLocalScan ? '待扫描' : currentDate;
             const scanDateTitle = remoteData ? '最新扫描日期' : awaitingLocalScan ? '尚未执行扫描' : '本地演示日期';
@@ -1598,7 +1600,7 @@
                     .then(data => {
                         if (cancelled) return;
                         setStaticScan(null);
-                        setApiStatus({ status: 'online', label: dataSourceName(data.provider), provider: data.provider, warnings: data.warnings || [] });
+                        setApiStatus({ status: 'online', label: dataSourceName(data.provider), provider: data.provider, warnings: data.warnings || [], providerOrder: data.providerOrder || [], configured: data.configured || {} });
                     })
                     .catch(() => {
                         Promise.all([

@@ -137,30 +137,59 @@ cron: "30 8 * * 1-5"
 
 ## 启动
 
-本仓库只保留运行和部署必要文件，未包含本地双击启动脚本。需要完整本地 API 时，使用命令行启动：
+不要直接双击 `index.html` 使用完整功能；直接打开文件时，页面无法访问本地 API 和 SQLite 缓存。
+
+macOS 上推荐双击 `双击启动.command`。脚本会自动创建 `.venv`、安装依赖、启动本地 Python API，并打开：
+
+```txt
+http://127.0.0.1:8765/index.html
+```
+
+如果系统拦截双击脚本，可以在终端运行：
+
+```bash
+bash start.sh
+```
+
+手动启动方式仍然可用：
 
 ```bash
 python3 -m pip install -r requirements.txt
 python3 server/app.py
 ```
 
-打开：
+然后打开：
 
 ```txt
 http://127.0.0.1:8765/index.html
 ```
 
-不要直接双击 `index.html` 使用完整功能；直接打开文件时，页面无法访问本地 API 和 SQLite 缓存。
+## 数据源配置
 
-## 免费源
-
-默认按 `AKShare -> 新浪备用免费源 -> mock` 的顺序尝试。本地 API 和 GitHub 收盘静态数据生成共用这条备用链路。安装依赖：
+默认按 `AKShare -> 新浪备用免费源 -> BaoStock -> mock` 的顺序尝试。本地 API 和 GitHub 收盘静态数据生成共用这条备用链路。安装依赖：
 
 ```bash
 python3 -m pip install -r requirements.txt
 ```
 
 如果免费源没安装、网络不可用、接口临时失败，系统会自动继续尝试下一个免费源；全部失败时才降级到 `MockProvider`，页面仍然能使用样本数据，并在响应或 JSON 的 `warnings` 字段里说明。
+
+本地可以通过环境变量或 `.env` 调整数据源顺序。仓库提供 `.env.example`，复制一份为 `.env` 后按需修改：
+
+```bash
+cp .env.example .env
+```
+
+示例：
+
+```bash
+LEEK_PROVIDER_ORDER=tushare,akshare,sina,baostock,mock
+TUSHARE_TOKEN=你的本地 token
+```
+
+`.env` 已被 `.gitignore` 忽略，不会提交到 GitHub。浏览器不会保存 token；前端只会显示 Tushare 是否已在本地后端配置、当前数据源顺序和降级 warning。
+
+如果要让 GitHub Actions 也使用 Tushare token，必须把 `TUSHARE_TOKEN` 放到 GitHub Secrets，再在 workflow 里注入环境变量；不要把 token 写进代码或静态页面。没有 token 时，Tushare 会初始化失败并按顺序降级到后续免费源。
 
 ## 本地缓存
 
@@ -176,7 +205,7 @@ data/cache.sqlite
 
 - 市场快照：5 分钟 TTL，过期后自动刷新。
 - 个股日 K：按 `code + trade_date` 存储；再次请求同一区间时优先读本地，缺失部分自动增量补齐。
-- AKShare 不可用时：继续尝试新浪备用免费源；两个免费源都不可用时使用 mock 数据补齐，接口响应会返回 `provider` 和 `warnings`。
+- AKShare 不可用时：继续尝试新浪备用免费源和 BaoStock；所有真实数据源都不可用时使用 mock 数据补齐，接口响应会返回 `provider`、`providerOrder`、`configured` 和 `warnings`。
 
 浏览器侧还会把本地扫描后的最近结果按运行策略保存到 IndexedDB。这个保存只用于刷新页面、切换策略后恢复查看，不会上传到 GitHub，也不会影响 GitHub Pages 的收盘静态数据。
 
