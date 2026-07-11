@@ -1,24 +1,22 @@
 {
   "ok": true,
   "mode": "close-scan",
-  "runAt": "2026-07-10 19:26:49",
-  "tradeDate": "2026-07-10",
-  "provider": "baostock",
+  "runAt": "2026-07-11 20:43:52",
+  "tradeDate": "2026-05-20",
+  "provider": "mock",
   "strategyName": "强中强反转突破策略 第二版",
   "strategyDescription": "收盘后扫描大盘恐慌放量下跌时逆势收阳的强势个股，用于生成次日观察清单。",
-  "warnings": [
-    "akshare 行情获取失败，已尝试备用免费源: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
-  ],
+  "warnings": [],
   "market": {
-    "date": "2026-07-10",
-    "time": "11:28",
+    "date": "2026-05-20",
+    "time": "14:05",
     "indexAboveMa": true,
-    "limitDownCount": 0,
+    "limitDownCount": 12,
     "crashDays": 0,
-    "marketDrop": 1.0,
-    "marketVolRatio": 0.99,
-    "ma20Up": false,
-    "stockCount": 47
+    "marketDrop": 1.25,
+    "marketVolRatio": 1.62,
+    "ma20Up": true,
+    "stockCount": 3
   },
   "funnel": {
     "s0": {
@@ -26,12 +24,12 @@
       "text": "开机"
     },
     "s1": {
-      "status": "fail",
-      "text": "0只触发"
+      "status": "pass",
+      "text": "3只触发"
     },
     "s2": {
-      "status": "neutral",
-      "text": "无新信号"
+      "status": "ready",
+      "text": "3只就绪"
     }
   },
   "details": {
@@ -43,7 +41,7 @@
       },
       {
         "name": "跌停家数",
-        "val": "0 <= 50",
+        "val": "12 <= 50",
         "status": "通过"
       },
       {
@@ -55,23 +53,23 @@
     "s1": [
       {
         "name": "大盘跌幅",
-        "val": "1.0% >= 1.0%",
+        "val": "1.25% >= 1.0%",
         "status": "通过"
       },
       {
         "name": "个股收盘价",
-        "val": "收盘 < 昨收",
-        "status": "阻断"
+        "val": "收盘 >= 昨收",
+        "status": "通过"
       },
       {
         "name": "大盘恐慌放量",
-        "val": "0.99 >= 1.5",
-        "status": "阻断"
+        "val": "1.62 >= 1.5",
+        "status": "通过"
       },
       {
         "name": "个股逆势收阳",
-        "val": "收盘 <= 开盘",
-        "status": "阻断"
+        "val": "收盘 > 开盘",
+        "status": "通过"
       }
     ],
     "s2": [
@@ -82,20 +80,42 @@
       },
       {
         "name": "资金未流出",
-        "val": "3 >= 5",
-        "status": "阻断"
+        "val": "7 >= 5",
+        "status": "通过"
       },
       {
         "name": "指标金叉",
-        "val": "未金叉",
-        "status": "阻断"
+        "val": "金叉",
+        "status": "通过"
       },
       {
         "name": "特大单净流入",
-        "val": "0 >= 1",
-        "status": "阻断"
+        "val": "2 >= 1",
+        "status": "通过"
       }
     ]
   },
-  "signals": []
+  "signals": [
+    {
+      "id": "600519",
+      "name": "贵州茅台",
+      "indicator": "站上均线, 资金未流出, 指标金叉, 特大单净流入",
+      "reason": "大盘跌幅+个股收盘价+大盘恐慌放量+个股逆势收阳",
+      "msg": "大盘跌幅:通过 / 个股收盘价:通过 / 大盘恐慌放量:通过 / 个股逆势收阳:通过 / 站上均线:通过 / 资金未流出:通过 / 指标金叉:通过 / 特大单净流入:通过"
+    },
+    {
+      "id": "000001",
+      "name": "平安银行",
+      "indicator": "站上均线, 资金未流出, 指标金叉, 特大单净流入",
+      "reason": "大盘跌幅+个股收盘价+大盘恐慌放量+个股逆势收阳",
+      "msg": "大盘跌幅:通过 / 个股收盘价:通过 / 大盘恐慌放量:通过 / 个股逆势收阳:通过 / 站上均线:通过 / 资金未流出:通过 / 指标金叉:通过 / 特大单净流入:通过"
+    },
+    {
+      "id": "300750",
+      "name": "宁德时代",
+      "indicator": "站上均线, 资金未流出, 指标金叉, 特大单净流入",
+      "reason": "大盘跌幅+个股收盘价+大盘恐慌放量+个股逆势收阳",
+      "msg": "大盘跌幅:通过 / 个股收盘价:通过 / 大盘恐慌放量:通过 / 个股逆势收阳:通过 / 站上均线:通过 / 资金未流出:通过 / 指标金叉:通过 / 特大单净流入:通过"
+    }
+  ]
 }

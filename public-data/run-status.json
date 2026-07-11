@@ -1,13 +1,11 @@
 {
   "ok": true,
   "mode": "close-scan",
-  "runAt": "2026-07-10 19:26:49",
-  "tradeDate": "2026-07-10",
-  "provider": "baostock",
-  "warnings": [
-    "akshare 行情获取失败，已尝试备用免费源: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"
-  ],
+  "runAt": "2026-07-11 20:43:52",
+  "tradeDate": "2026-05-20",
+  "provider": "mock",
+  "warnings": [],
   "latestFile": "public-data/latest-scan.json",
   "marketFile": "public-data/market-snapshot.json",
-  "historyFile": "public-data/history/2026-07-10.json"
+  "historyFile": "public-data/history/2026-05-20.json"
 }

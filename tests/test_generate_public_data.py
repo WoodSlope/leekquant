@@ -42,6 +42,7 @@ class GeneratePublicDataTest(unittest.TestCase):
             self.assertIn("funnel", latest)
             self.assertIn("details", latest)
             self.assertIsInstance(latest["signals"], list)
+            self.assertGreaterEqual(len(latest["signals"]), 3)
 
             self.assertTrue(status["ok"])
             self.assertEqual(status["latestFile"], "public-data/latest-scan.json")

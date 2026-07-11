@@ -66,10 +66,18 @@ class CacheStore:
             return None
         if not trade_date and self.is_expired(row["fetched_at"], ttl_minutes):
             return None
+        payload = json.loads(row["payload"])
+        if isinstance(payload, dict) and "market" in payload and "warnings" in payload:
+            market = payload["market"]
+            warnings = payload["warnings"]
+        else:
+            market = payload
+            warnings = []
         return {
             "tradeDate": row["trade_date"],
             "provider": row["provider"],
-            "market": json.loads(row["payload"]),
+            "market": market,
+            "warnings": warnings,
             "fetchedAt": row["fetched_at"],
         }
 
@@ -77,15 +85,16 @@ class CacheStore:
         record = self.get_market_snapshot_record(trade_date=trade_date, ttl_minutes=ttl_minutes)
         return record["market"] if record else None
 
-    def save_market_snapshot(self, market: dict, provider: str):
+    def save_market_snapshot(self, market: dict, provider: str, warnings: list[str] | None = None):
         trade_date = market.get("date") or datetime.now().strftime("%Y-%m-%d")
+        payload = {"market": market, "warnings": warnings or []}
         with self.connect() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO market_snapshot (trade_date, provider, payload, fetched_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (trade_date, provider, json.dumps(market, ensure_ascii=False), self.now()),
+                (trade_date, provider, json.dumps(payload, ensure_ascii=False), self.now()),
             )
 
     def get_daily_range(self, code: str, start: str, end: str) -> list[dict]:

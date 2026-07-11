@@ -25,6 +25,21 @@ class FakeResult:
 
 
 class BaostockProviderTest(unittest.TestCase):
+    def test_today_market_rejects_empty_current_trade_day(self):
+        fake_bs = types.SimpleNamespace()
+        fake_bs.login = lambda: types.SimpleNamespace(error_code="0", error_msg="")
+        fake_bs.logout = lambda: None
+        fake_bs.query_all_stock = lambda day: FakeResult(["code", "code_name"], [])
+        fake_bs.query_history_k_data_plus = lambda *args, **kwargs: FakeResult(
+            ["date", "close", "volume", "pctChg"],
+            [["2026-07-10", "3500", "1000000", "0.5"]],
+        )
+
+        with patch.dict("sys.modules", {"baostock": fake_bs}):
+            provider = BaostockProvider(limit=1)
+            with self.assertRaisesRegex(RuntimeError, "未返回当前交易日股票清单"):
+                provider.today_market()
+
     def test_stock_daily_maps_baostock_rows_to_project_daily_contract(self):
         fake_bs = types.SimpleNamespace()
         fake_bs.login = lambda: types.SimpleNamespace(error_code="0", error_msg="")

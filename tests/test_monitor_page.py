@@ -23,6 +23,30 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("const scanSignalCount = (data.signals || []).length;", html)
         self.assertIn("onShowToast(`已按【${appliedStrategy.name}】完成扫描：${scanSignalCount} 只候选 (${dataSourceName(data.provider)})`);", html)
 
+    def test_monitor_scan_button_exposes_busy_feedback(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("isScanning ? '扫描中，请稍候' : scanButtonTitle", html)
+        self.assertIn("<Icons.LoaderCircle", html)
+        self.assertIn("animate-spin", html)
+
+    def test_monitor_mobile_holding_cards_keep_risk_actions_visible(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn('md:hidden space-y-3', html)
+        self.assertIn('aria-label={`${row.name}：${canOperateHolding ? holdingActionLabel : \'只读\'}`}', html)
+        self.assertIn('hidden md:table', html)
+
+    def test_backtest_start_exposes_busy_feedback_and_blocks_duplicates(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+        backtest_view = html[html.index("const ViewBacktest") : html.index("// ==========================================\n        // 主入口组件")]
+
+        self.assertIn("const [isStartingBacktest, setIsStartingBacktest] = useState(false);", backtest_view)
+        self.assertIn("const backtestStartText = isStartingBacktest ? '回测中' : '启动引擎';", backtest_view)
+        self.assertIn("disabled={isStartingBacktest}", backtest_view)
+        self.assertIn("setIsStartingBacktest(true);", backtest_view)
+        self.assertIn("setIsStartingBacktest(false);", backtest_view)
+
     def test_monitor_stat_labels_running_strategy(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
 
@@ -69,6 +93,16 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("数据可信层级：历史日线源", html)
         self.assertIn("数据可信层级：行情兜底源", html)
         self.assertIn("数据可信层级：样本演示数据", html)
+
+    def test_monitor_notice_summarizes_provider_fallback_without_raw_errors(self):
+        html = (ROOT / "index.html").read_text(encoding="utf-8")
+
+        self.assertIn("const providerFallbackNotice =", html)
+        self.assertIn("本次已从 AKShare 切换至备用数据源", html)
+        self.assertIn("BaoStock 当前不可用", html)
+        self.assertIn("item.toLowerCase().includes('baostock')", html)
+        self.assertIn("${providerFallbackNotice}", html)
+        self.assertNotIn("${(remoteData?.warnings || []).join(' ')}", html)
 
     def test_monitor_scan_status_is_in_funnel_card_actions(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
@@ -164,8 +198,10 @@ class MonitorPageTest(unittest.TestCase):
 
         holding_card = html[html.index("当前持仓风控") : html.index("{positions.length === 0")]
         self.assertIn("disabled={!canOperateHolding}", holding_card)
-        self.assertIn("canOperateHolding ? '离场' : '只读'", holding_card)
-        self.assertIn("canOperateHolding ? '斩仓' : '只读'", holding_card)
+        self.assertIn("const holdingActionLabel = row.status === 'warning' ? '离场' : row.status === 'danger' ? '斩仓' : '';", holding_card)
+        self.assertIn("canOperateHolding ? holdingActionLabel : '只读'", holding_card)
+        self.assertIn("canOperateHolding ? '离场' : '只读'", html)
+        self.assertIn("canOperateHolding ? '斩仓' : '只读'", html)
         self.assertNotIn("disabled={!isLiveDate}", holding_card)
         self.assertNotIn("isLiveDate ? '离场'", holding_card)
         self.assertNotIn("isLiveDate ? '斩仓'", holding_card)

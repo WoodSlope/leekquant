@@ -20,6 +20,8 @@ class BaostockProvider:
     def today_market(self) -> dict:
         trade_date = datetime.now().strftime("%Y-%m-%d")
         stock_rows = self._query_all_stock(trade_date)
+        if not stock_rows:
+            raise RuntimeError("BaoStock 未返回当前交易日股票清单")
         stocks = []
         for item in stock_rows[: self.limit]:
             code = self._plain_code(item.get("code", ""))

@@ -60,6 +60,7 @@ class Handler(SimpleHTTPRequestHandler):
         providers, warnings = build_providers("auto")
         cached = STORE.get_market_snapshot_record(ttl_minutes=5)
         if cached:
+            warnings.extend(cached["warnings"])
             return self.json(
                 {
                     "ok": True,
@@ -72,13 +73,13 @@ class Handler(SimpleHTTPRequestHandler):
             )
         try:
             provider, market = call_provider_method(providers, warnings, "today_market", action_label="行情获取")
-            STORE.save_market_snapshot(market, provider.name)
+            STORE.save_market_snapshot(market, provider.name, warnings=warnings)
             return self.json({"ok": True, "provider": provider.name, "warnings": warnings, "market": market, "cache": STORE.cache_info()})
         except Exception as exc:
             fallback = MockProvider()
             warnings.append(str(exc))
             market = fallback.today_market()
-            STORE.save_market_snapshot(market, fallback.name)
+            STORE.save_market_snapshot(market, fallback.name, warnings=warnings)
             return self.json({"ok": True, "provider": fallback.name, "warnings": warnings, "market": market, "cache": STORE.cache_info()})
 
     def handle_scan(self):
@@ -90,16 +91,17 @@ class Handler(SimpleHTTPRequestHandler):
             if cached:
                 market = cached["market"]
                 provider_name = cached["provider"]
+                warnings.extend(cached["warnings"])
             else:
                 provider, market = call_provider_method(providers, warnings, "today_market", action_label="行情获取")
                 provider_name = provider.name
-                STORE.save_market_snapshot(market, provider_name)
+                STORE.save_market_snapshot(market, provider_name, warnings=warnings)
         except Exception as exc:
             fallback = MockProvider()
             warnings.append(str(exc))
             provider_name = fallback.name
             market = fallback.today_market()
-            STORE.save_market_snapshot(market, provider_name)
+            STORE.save_market_snapshot(market, provider_name, warnings=warnings)
         result = scan(
             payload.get("config") or {},
             market,
