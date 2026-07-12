@@ -1,16 +1,13 @@
-name: Close Scan
+name: Verify Demo Data
 
 on:
   workflow_dispatch:
-  schedule:
-    # 16:30 Asia/Shanghai, after the A-share close. GitHub cron uses UTC.
-    - cron: "30 8 * * 1-5"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  generate-public-data:
+  verify-demo-data:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,20 +19,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Generate close scan data
-        run: python scripts/generate_public_data.py --provider auto
-
-      - name: Commit generated data
+      - name: Validate fixed demo files
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public-data
-          if git diff --cached --quiet; then
-            echo "No public data changes."
-          else
-            git commit -m "chore: update close scan data"
-            git push
-          fi
+          python -m json.tool public-data/latest-scan.json > /dev/null
+          python -m json.tool public-data/run-status.json > /dev/null
+          python -m json.tool public-data/market-snapshot.json > /dev/null

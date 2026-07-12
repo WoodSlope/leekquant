@@ -92,7 +92,7 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("const dataSourceTier =", html)
         self.assertIn("数据可信层级：历史日线源", html)
         self.assertIn("数据可信层级：行情兜底源", html)
-        self.assertIn("数据可信层级：样本演示数据", html)
+        self.assertIn("数据可信层级：演示数据", html)
 
     def test_monitor_notice_summarizes_provider_fallback_without_raw_errors(self):
         html = (ROOT / "index.html").read_text(encoding="utf-8")
@@ -232,7 +232,7 @@ class MonitorPageTest(unittest.TestCase):
         self.assertIn("const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';", html)
         self.assertIn("const scanButtonDisabled = hasStaticScan || isScanning;", html)
         self.assertIn("disabled={scanButtonDisabled}", html)
-        self.assertIn("hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新'", html)
+        self.assertIn("hasStaticScan ? 'GitHub Pages 使用固定演示数据；真实扫描请下载后启动本地服务'", html)
 
         funnel_card = html[html.index("策略漏斗总览") : html.index("第 0 步：市场环境")]
         self.assertIn("hasStaticScan ? (", funnel_card)

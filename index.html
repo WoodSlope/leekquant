@@ -26,6 +26,14 @@
         /* 移除数字输入框的箭头 */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        @media (min-width: 1200px) and (min-height: 700px) and (max-height: 950px) {
+            .screenshot-monitor-grid { min-height: 0 !important; max-height: calc(100vh - 308px) !important; height: calc(100vh - 308px) !important; flex: 0 1 auto !important; overflow: hidden; }
+            .screenshot-monitor-funnel { min-height: 0 !important; }
+            .screenshot-monitor-funnel > div:last-child { overflow-y: auto; }
+            .screenshot-monitor-stack { min-height: 0; padding-bottom: 0 !important; }
+            .screenshot-monitor-card { flex: 1 1 0%; min-height: 0 !important; }
+            .screenshot-monitor-card > div:last-child { min-height: 0; overflow: auto; }
+        }
     </style>
 </head>
 <body class="bg-[#0D0E11] text-zinc-300 antialiased overflow-hidden">
@@ -273,8 +281,8 @@
             .replace(/MACD/g, '趋势指标')
             .replace(/RSI/g, '超卖指标')
             .trim();
-        const dataSourceName = (provider) => provider === 'tushare' ? 'Tushare 历史日线' : provider === 'akshare' ? 'AKShare 历史日线' : provider === 'baostock' ? 'BaoStock 历史日线备用' : provider === 'sina' ? '新浪行情兜底' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
-        const dataSourceTier = (provider) => ['tushare', 'akshare', 'baostock'].includes(provider) ? '数据可信层级：历史日线源' : provider === 'sina' ? '数据可信层级：行情兜底源' : provider === 'mock' || provider === 'local' ? '数据可信层级：样本演示数据' : '数据可信层级：收盘静态快照';
+        const dataSourceName = (provider) => provider === 'tushare' ? 'Tushare 历史日线' : provider === 'akshare' ? 'AKShare 历史日线' : provider === 'baostock' ? 'BaoStock 历史日线备用' : provider === 'sina' ? '新浪行情兜底' : provider === 'demo' ? '固定演示数据' : provider === 'mock' ? '样本数据' : provider === 'static' ? '收盘快照' : '本地引擎';
+        const dataSourceTier = (provider) => ['tushare', 'akshare', 'baostock'].includes(provider) ? '数据可信层级：历史日线源' : provider === 'sina' ? '数据可信层级：行情兜底源' : ['demo', 'mock', 'local'].includes(provider) ? '数据可信层级：演示数据' : '数据可信层级：收盘静态快照';
         const STOCK_BOARD_OPTIONS = [
             { value: 'all', label: '全部' },
             { value: 'main', label: '主板' },
@@ -562,11 +570,14 @@
                 normalizeStrategy({ id: 'str_1', name: '强中强反转突破策略 第二版', status: 'applied', source: '手动创建', updatedAt: '2026-05-18', description: '适用于震荡市与熊市反弹阶段，寻找大盘恐慌放量下跌时逆势收阳的极强个股。' }, 0),
                 normalizeStrategy({ id: 'str_2', name: '稳健均线跟随策略 第二版', status: 'idle', source: '回测同步', updatedAt: '2026-05-15', description: '适合结构性牛市。要求个股站稳50日中线趋势，配合资金持续流入。' }, 1),
                 normalizeStrategy({ id: 'str_3', name: '极度恐慌抄底套件', status: 'idle', source: '手动创建', updatedAt: '2026-05-10', description: '左侧交易策略。寻找超卖后主力资金悄悄介入的标的，快进快出。' }, 2),
+                normalizeStrategy({ id: 'str_4', name: '量价突破观察策略', status: 'idle', source: '回测同步', updatedAt: '2026-05-08', description: '筛选平台整理后放量突破、趋势结构完整且回撤受控的观察标的。' }, 3),
             ],
             backtests: [
                 { id: 'bt_1', name: '强中强2025全年回测', range: '2025-01-01 ~ 2025-12-31', return: '+45.2%', winRate: '62.5%', synced: true, strategyId: 'str_1' },
                 { id: 'bt_2', name: '稳健均线5年抗压测试', range: '2021-01-01 ~ 2026-01-01', return: '+112.4%', winRate: '55.1%', synced: true, strategyId: 'str_2' },
                 { id: 'bt_3', name: '巨量滞涨离场调优', range: '2025-06-01 ~ 2026-05-01', return: '-5.2%', winRate: '42.0%', synced: false, strategyId: null },
+                { id: 'bt_4', name: '恐慌反转三年滚动测试', range: '2023-01-01 ~ 2025-12-31', return: '+68.7%', winRate: '58.6%', synced: false, strategyId: null },
+                { id: 'bt_5', name: '平台突破参数对照组', range: '2024-01-01 ~ 2025-12-31', return: '+31.8%', winRate: '53.9%', synced: true, strategyId: 'str_4' },
             ],
             backtestDetails: {
                 'bt_1': {
@@ -583,6 +594,9 @@
                 { id: 'tr_2', code: '600036', name: '招商银行', entry: '2026-04-05', exit: '2026-04-10', return: '-8.5%', reason: '硬止损触发', status: 'DISCIPLINE', cost: 0 },
                 { id: 'tr_3', code: '300750', name: '宁德时代', entry: '2026-02-10', exit: '2026-03-20', return: '-12.2%', reason: '放量破位', status: 'VIOLATION', cost: -4500 },
                 { id: 'tr_4', code: '600519', name: '贵州茅台', entry: '2026-01-15', exit: '2026-02-28', return: '+22.1%', reason: '移动止盈回撤', status: 'DISCIPLINE', cost: 0 },
+                { id: 'tr_5', code: '601318', name: '中国平安', entry: '2025-12-08', exit: '2026-01-09', return: '+8.6%', reason: '趋势转弱离场', status: 'DISCIPLINE', cost: 0 },
+                { id: 'tr_6', code: '000651', name: '格力电器', entry: '2025-11-21', exit: '2025-12-03', return: '-4.3%', reason: '跌破平台下沿', status: 'DISCIPLINE', cost: 0 },
+                { id: 'tr_7', code: '300308', name: '中际旭创', entry: '2025-10-13', exit: '2025-11-06', return: '+18.9%', reason: '分批止盈完成', status: 'DISCIPLINE', cost: 0 },
             ],
             monitorActive: {
                 "2026-05-20": {
@@ -606,9 +620,11 @@
                 }
             },
             monitorPositions: [
-                { id: '601318', name: '中国平安', entryDate: '05-11', entryPrice: '42.10', profit: '+4.2%', status: 'normal', msg: '正常持股' },
+                { id: '601318', name: '中国平安', entryDate: '05-11', entryPrice: '42.10', profit: '+4.2%', status: 'normal', msg: '趋势结构正常' },
                 { id: '000651', name: '格力电器', entryDate: '05-01', entryPrice: '38.50', profit: '-8.3%', status: 'warning', msg: '硬止损触发' },
                 { id: '000002', name: '万科A', entryDate: '04-12', entryPrice: '10.20', profit: '-14.5%', status: 'danger', msg: '[违规持有3天]' },
+                { id: '002594', name: '比亚迪', entryDate: '05-14', entryPrice: '318.60', profit: '+7.6%', status: 'normal', msg: '移动止盈保护' },
+                { id: '600036', name: '招商银行', entryDate: '05-16', entryPrice: '45.32', profit: '+1.8%', status: 'normal', msg: '等待放量确认' },
             ]
         };
 
@@ -822,7 +838,9 @@
             })();
             const tushareNotice = apiStatus.configured?.tushare ? 'Tushare 已使用本地 token 配置。' : apiStatus.providerOrder?.includes('tushare') ? 'Tushare 未配置本地 token，已按顺序降级。' : '';
             const dataNotice = staticData
-                ? (staticData.provider === 'mock'
+                ? (staticData.provider === 'demo'
+                    ? `当前为固定演示数据，快照日期 ${staticData.tradeDate || '--'}，用于 GitHub Pages 展示与截图，不代表实时行情。${dataTierNotice}`
+                    : staticData.provider === 'mock'
                     ? `当前为收盘静态样本数据，最后生成时间 ${staticData.runAt || '--'}，适合验证 GitHub 半自动版流程。${dataTierNotice}${providerFallbackNotice}`
                     : `当前为 ${staticData.tradeDate || '--'} 收盘后自动生成的观察清单，数据源：${dataSourceLabel}，最后更新时间 ${staticData.runAt || '--'}。${dataTierNotice}${providerFallbackNotice}`)
                 : remoteData?.provider === 'mock'
@@ -840,7 +858,7 @@
             const signalTitle = staticData ? '收盘观察信号' : remoteData && isLiveDate ? '本地扫描信号' : isLiveDate ? '今日买入信号' : '历史买入信号';
             const signalStatLabel = hasStaticScan ? "观察信号" : apiStatus.status === 'online' ? "扫描信号" : "买入信号";
             const scanButtonText = hasStaticScan ? '只读快照' : isScanning ? '扫描中' : '执行扫描';
-            const scanButtonTitle = hasStaticScan ? 'GitHub Pages 只展示最近一次收盘快照，等待收盘自动更新' : canRunScan ? '按当前运行策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
+            const scanButtonTitle = hasStaticScan ? 'GitHub Pages 使用固定演示数据；真实扫描请下载后启动本地服务' : canRunScan ? '按当前运行策略重新执行扫描' : !appliedStrategy ? '请先在策略页应用一个策略' : '本地接口未连接时使用演示数据';
             const scanButtonAccessibleTitle = isScanning ? '扫描中，请稍候' : scanButtonTitle;
             const scanButtonDisabled = hasStaticScan || isScanning;
             const activeScanButtonClass = "bg-blue-600 hover:bg-blue-500 text-white px-3 md:px-4 py-1.5 rounded-md flex items-center text-sm font-medium transition-colors";
@@ -955,7 +973,7 @@
                 <PageShell>
                     <PageHeader
                         title={hasStaticScan ? "收盘策略复盘" : "策略监控台"}
-                        subtitle={hasStaticScan ? "每天收盘后由自动任务生成观察清单，适合轻量复盘和截图展示。" : "基于历史日线和收盘数据执行扫描；每个交易日收盘后生成明日观察清单，不作为盘中实时买卖提醒。"}
+                        subtitle={hasStaticScan ? "固定演示数据完整呈现策略漏斗、观察信号和持仓风控，适合在线展示与截图。" : "基于历史日线和收盘数据执行扫描；每个交易日收盘后生成明日观察清单，不作为盘中实时买卖提醒。"}
                         actions={
                             <button onClick={() => handleRunScan()} disabled={scanButtonDisabled} aria-disabled={!canRunScan || scanButtonDisabled} title={scanButtonAccessibleTitle} className={scanButtonClass}>
                                 {isScanning ? <Icons.LoaderCircle size={14} className="mr-1 animate-spin" /> : <Icons.Play size={14} className="mr-1" />} {scanButtonText}
@@ -973,7 +991,7 @@
 
                     {showNotice && <NoticeStrip type={dataNoticeType} onDismiss={() => setShowNotice(false)}>{dataNotice}</NoticeStrip>}
 
-                    <div className="flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 overflow-visible min-h-min">
+                    <div className="screenshot-monitor-grid flex-1 flex flex-col lg:flex-row gap-4 md:gap-6 overflow-visible min-h-min">
                         <Card
                             title={<><Icons.Activity className="mr-2 text-zinc-400" size={16}/>策略漏斗总览</>}
                             actions={
@@ -991,7 +1009,7 @@
                                     </div>
                                 )
                             }
-                            className="w-full lg:w-[360px] shrink-0 min-h-[350px]"
+                            className="screenshot-monitor-funnel w-full lg:w-[360px] shrink-0 min-h-[350px]"
                             headerClass="px-4 py-3"
                             bodyClass="p-4 space-y-4"
                         >
@@ -1023,7 +1041,7 @@
                             ))}
                         </Card>
 
-                        <div className="flex-1 flex flex-col gap-4 md:gap-6 min-w-0 pb-2">
+                        <div className="screenshot-monitor-stack flex-1 flex flex-col gap-4 md:gap-6 min-w-0 pb-2">
                             <Card
                                 title={<><Icons.Play className="mr-2 text-green-500" size={16}/>{signalTitle}<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{signals.length}</span></>}
                                 actions={
@@ -1079,7 +1097,7 @@
                                         </div>
                                     </div>
                                 }
-                                className="min-h-[300px] flex flex-col shrink-0"
+                                className="screenshot-monitor-card min-h-[300px] flex flex-col shrink-0"
                                 headerClass="px-4 py-3"
                                 bodyClass="p-0 overflow-x-auto"
                             >
@@ -1100,7 +1118,7 @@
                                 </table>
                             </Card>
 
-                            <Card title={<><Icons.Briefcase className="mr-2 text-blue-500" size={16}/>当前持仓风控<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{positions.length}</span></>} className="min-h-[300px] flex flex-col shrink-0" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto">
+                            <Card title={<><Icons.Briefcase className="mr-2 text-blue-500" size={16}/>当前持仓风控<span className="ml-2 text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-md">{positions.length}</span></>} className="screenshot-monitor-card min-h-[300px] flex flex-col shrink-0" headerClass="px-4 py-3" bodyClass="p-0 overflow-x-auto">
                                 <div className="md:hidden space-y-3 p-3">
                                     {positions.map(row => {
                                         const holdingActionLabel = row.status === 'warning' ? '离场' : row.status === 'danger' ? '斩仓' : '';
